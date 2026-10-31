@@ -1,0 +1,21 @@
+{% extends "staff/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">WORKSPACE</p>
+    <h1>{{ title }}</h1>
+    <p class="page-subtitle">{{ description }}</p>
+  </div>
+</section>
+<section class="panel placeholder-panel">
+  <span class="placeholder-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M9 7h6M9 11h6"/></svg>
+  </span>
+  <h2>{{ title }} workspace</h2>
+  <p>{{ description }}</p>
+  <span class="coming-soon">STAGE 2 PLACEHOLDER</span>
+</section>
+{% endblock %}

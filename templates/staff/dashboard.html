@@ -1,0 +1,115 @@
+{% extends "staff/base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">OVERVIEW</p>
+    <h1>Good {{ "morning" if now_hour < 12 else ("afternoon" if now_hour < 18 else "evening") }}, {{ staff_user.name.split()[0] if staff_user else "there" }} <span class="heading-wave" aria-hidden="true">✦</span></h1>
+    <p class="page-subtitle">Here's what's happening with your subscriptions today.</p>
+  </div>
+  <div class="heading-date">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+    <span>{{ today_label }}</span>
+  </div>
+</section>
+
+<section class="metrics-grid" aria-label="Business summary">
+  <article class="metric-card">
+    <div class="metric-top"><span class="metric-icon icon-blue"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.8 20v-1.6A4.4 4.4 0 0 1 7.2 14h3.6a4.4 4.4 0 0 1 4.4 4.4V20M17 8h5M19.5 5.5v5"/></svg></span><span class="metric-trend trend-neutral">All time</span></div>
+    <p class="metric-label">Total Customers</p><p class="metric-value">{{ total_customers }}</p>
+    <p class="metric-note">Registered customer accounts</p>
+  </article>
+  <article class="metric-card">
+    <div class="metric-top"><span class="metric-icon icon-violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.7 9A7 7 0 0 1 18 6.4L20 9M4 15l2 2.6A7 7 0 0 0 18.3 15"/></svg></span><span class="metric-trend trend-positive">Live</span></div>
+    <p class="metric-label">Active Subscriptions</p><p class="metric-value">{{ active_subscriptions }}</p>
+    <p class="metric-note">Currently active plans</p>
+  </article>
+  <article class="metric-card">
+    <div class="metric-top"><span class="metric-icon icon-amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-3-1.8-3 1.8-3-1.8-3 1.8v-17Z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><span class="metric-trend trend-attention">Needs attention</span></div>
+    <p class="metric-label">Pending Invoices</p><p class="metric-value">{{ pending_invoice_count }}</p>
+    <p class="metric-note">Open or overdue invoices</p>
+  </article>
+  <article class="metric-card">
+    <div class="metric-top"><span class="metric-icon icon-green"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg></span><span class="metric-trend trend-positive">Received</span></div>
+    <p class="metric-label">Payments Received</p><p class="metric-value metric-currency">{{ payments_received|currency }}</p>
+    <p class="metric-note">Successful payments to date</p>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <article class="panel revenue-panel">
+    <div class="panel-heading">
+      <div><h2>Revenue overview</h2><p>Successful payments over the last 6 months</p></div>
+      <span class="panel-period"><span class="period-dot"></span> Last 6 months</span>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-total"><span>Revenue received</span><strong>{{ payments_received|currency }}</strong></div>
+      <svg id="revenue-chart" class="revenue-chart" viewBox="0 0 720 230" role="img" aria-label="Revenue received by month"></svg>
+      <script type="application/json" id="revenue-data">{{ revenue_data|tojson }}</script>
+    </div>
+  </article>
+
+  <article class="panel activity-panel">
+    <div class="panel-heading"><div><h2>Recent activities</h2><p>The latest updates across your workspace</p></div></div>
+    <div class="activity-list">
+      {% for activity in recent_activities %}
+      <div class="activity-item">
+        <span class="activity-marker marker-{{ activity.kind }}">
+          {% if activity.kind == "customer" %}<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20"/></svg>
+          {% elif activity.kind == "payment" %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+          {% elif activity.kind == "invoice" %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-3-1.8-3 1.8-3-1.8-3 1.8v-17Z"/></svg>
+          {% else %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/></svg>{% endif %}
+        </span>
+        <div class="activity-copy"><p>{{ activity.label }}</p><time datetime="{{ activity.date.isoformat() }}">{{ activity.date.strftime("%b %d, %Y") }}</time></div>
+      </div>
+      {% else %}
+      <div class="empty-state"><span class="empty-icon">✦</span><p>No activity yet</p><small>Updates will appear here as your workspace grows.</small></div>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-heading"><div><h2>Recent customer registrations</h2><p>Your newest customers</p></div><a class="text-link" href="{{ url_for('staff_customers') }}">View all <span aria-hidden="true">→</span></a></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Customer</th><th>Company</th><th>Joined</th></tr></thead>
+        <tbody>
+          {% for customer in recent_customers %}
+          <tr><td><span class="table-person"><span class="mini-avatar">{{ customer.name[:1]|upper }}</span><span><strong>{{ customer.name }}</strong><small>{{ customer.email }}</small></span></span></td><td>{{ customer.company_name or "—" }}</td><td class="muted-cell">{{ customer.created_at.strftime("%b %d, %Y") }}</td></tr>
+          {% else %}<tr><td class="table-empty" colspan="3">No customers registered yet.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-heading"><div><h2>Upcoming renewals</h2><p>Subscriptions billing next</p></div><a class="text-link" href="{{ url_for('staff_subscriptions') }}">View all <span aria-hidden="true">→</span></a></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Customer</th><th>Plan</th><th>Renewal</th></tr></thead>
+        <tbody>
+          {% for subscription in upcoming_renewals %}
+          <tr><td><span class="table-person"><span class="mini-avatar avatar-lilac">{{ subscription.customer.name[:1]|upper }}</span><span><strong>{{ subscription.customer.name }}</strong><small>{{ subscription.subscription_code }}</small></span></span></td><td>{{ subscription.plan.name }}</td><td><span class="date-pill">{{ subscription.next_billing_date.strftime("%b %d") }}</span></td></tr>
+          {% else %}<tr><td class="table-empty" colspan="3">No upcoming renewals.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel pending-panel">
+    <div class="panel-heading"><div><h2>Pending payments</h2><p>Invoices awaiting payment</p></div><a class="text-link" href="{{ url_for('staff_invoices') }}">View invoices <span aria-hidden="true">→</span></a></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Invoice</th><th>Customer</th><th>Due date</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for invoice in pending_invoices %}
+          <tr><td><strong>{{ invoice.invoice_number }}</strong></td><td>{{ invoice.customer.name }}</td><td class="muted-cell">{{ invoice.due_date.strftime("%b %d, %Y") }}</td><td><strong>{{ invoice.total|currency }}</strong></td><td><span class="status-badge status-{{ invoice.status }}">{{ invoice.status|capitalize }}</span></td></tr>
+          {% else %}<tr><td class="table-empty" colspan="5">You're all caught up on payments.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+{% endblock %}
