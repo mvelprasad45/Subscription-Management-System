@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+enum ProductType {
+  SOFTWARE
+  ADD_ON
+  SERVICE
+  OTHER
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum BillingPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String
+  name          String
+  role          UserRole       @default(CUSTOMER)
+  products      Product[]      @relation("ProductCreator")
+  subscriptions Subscription[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Product {
+  id            String                  @id @default(cuid())
+  name          String
+  type          ProductType
+  salesPrice    Decimal                 @db.Decimal(10, 2)
+  costPrice     Decimal                 @db.Decimal(10, 2)
+  notes         String?
+  status        ProductStatus           @default(ACTIVE)
+  taxId         String?
+  tax           Tax?                    @relation(fields: [taxId], references: [id], onDelete: SetNull)
+  createdById   String
+  createdBy     User                    @relation("ProductCreator", fields: [createdById], references: [id])
+  variants      Variant[]
+  plans         Plan[]
+  templateLines QuotationTemplateLine[]
+  subscriptions Subscription[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([name])
+  @@index([status])
+  @@index([createdAt])
+  @@index([taxId])
+  @@index([createdById])
+}
+
+model Variant {
+  id            String                  @id @default(cuid())
+  productId     String
+  product       Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attribute     String
+  value         String
+  extraPrice    Decimal                 @default(0) @db.Decimal(10, 2)
+  templateLines QuotationTemplateLine[]
+
+  @@index([productId])
+}
+
+model Plan {
+  id              String              @id @default(cuid())
+  productId       String
+  product         Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name            String
+  price           Decimal             @db.Decimal(10, 2)
+  billingPeriod   BillingPeriod
+  minQuantity     Int                 @default(1)
+  availableFrom   DateTime?
+  availableTo     DateTime?
+  autoClose       Boolean             @default(false)
+  allowEarlyClose Boolean             @default(false)
+  allowPause      Boolean             @default(false)
+  allowRenew      Boolean             @default(true)
+  templates       QuotationTemplate[]
+
+  @@index([productId])
+}
+
+model Tax {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  ratePercent Decimal   @db.Decimal(5, 2)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model QuotationTemplate {
+  id           String                  @id @default(cuid())
+  name         String
+  validityDays Int
+  planId       String
+  plan         Plan                    @relation(fields: [planId], references: [id])
+  lines        QuotationTemplateLine[]
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@index([planId])
+}
+
+model QuotationTemplateLine {
+  id         String            @id @default(cuid())
+  templateId String
+  template   QuotationTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product           @relation(fields: [productId], references: [id])
+  variantId  String?
+  variant    Variant?          @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  quantity   Int
+
+  @@index([templateId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  productId String
+  product   Product            @relation(fields: [productId], references: [id])
+  userId    String
+  user      User               @relation(fields: [userId], references: [id])
+  status    SubscriptionStatus @default(ACTIVE)
+  createdAt DateTime           @default(now())
+
+  @@index([productId, status])
+}
