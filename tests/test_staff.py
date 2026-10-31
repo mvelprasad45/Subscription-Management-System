@@ -147,7 +147,7 @@ def test_login_success_failure_and_password_hashing(client, app, records):
     login_page = client.get("/staff/login")
     assert login_page.status_code == 200
     assert b"Welcome back" in login_page.data
-    assert b"Make good" in login_page.data
+    assert b"Every plan, invoice and payment in one place." in login_page.data
 
     failed = login(client, "staff@example.test", "wrong-password")
     assert failed.status_code == 401

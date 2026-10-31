@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111d35">
+  <meta name="theme-color" content="#c4bde4">
   <title>Sign in · Brightloop</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/staff.css') }}">
 </head>
@@ -11,41 +11,49 @@
   <main class="login-shell">
     <section class="login-brand-panel" aria-label="Brightloop Software">
       <a class="login-brand" href="{{ url_for('staff_login') }}" aria-label="Brightloop Software">
-        <span class="login-brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" fill="none">
-            <path d="M7 17.2 13.3 23 25 9" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M5 8.5h8" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
-          </svg>
-        </span>
-        <span><strong>brightloop</strong><small>SOFTWARE</small></span>
+        <span class="login-brand-mark" aria-hidden="true">C</span>
+        <span class="login-brand-name">Brightloop</span>
       </a>
       <div class="login-brand-copy">
-        <span class="login-kicker">BRIGHTLOOP SOFTWARE</span>
-        <h1>Make good<br>work flow.</h1>
-        <p>One clear workspace to care for customers, subscriptions, and the details that keep business moving.</p>
+        <span class="login-kicker">BRIGHTLOOP WORKSPACE</span>
+        <h1>Every plan, invoice and payment in one place.</h1>
+        <p>A clear, calm workspace to manage subscriptions and keep every customer relationship moving forward.</p>
       </div>
-      <span class="login-brand-footer">A smarter way to work together.</span>
+      <span class="login-brand-footer">Thoughtful tools for the work that matters.</span>
     </section>
     <section class="login-form-panel" aria-labelledby="login-heading">
       <div class="login-form-wrap">
         <span class="login-mobile-brand">BRIGHTLOOP SOFTWARE</span>
-        <p class="login-eyebrow">STAFF WORKSPACE</p>
         <h2 id="login-heading">Welcome back</h2>
-        <p class="login-subtitle">Sign in to your workspace</p>
+        <p class="login-subtitle">Sign in to manage your subscriptions and invoices.</p>
         {% if error %}
         <div class="login-error" role="alert">{{ error }}</div>
         {% endif %}
         <form class="login-form" method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <label for="login-email">Email address</label>
+          <label for="login-email">Email</label>
           <input id="login-email" type="email" name="email" autocomplete="username" required autofocus>
           <label for="login-password">Password</label>
-          <input id="login-password" type="password" name="password" autocomplete="current-password" required>
-          <button type="submit">Sign in</button>
+          <span class="login-password-field">
+            <input id="login-password" type="password" name="password" autocomplete="current-password" required>
+            <button class="login-password-toggle" type="button" aria-controls="login-password" aria-pressed="false">Show</button>
+          </span>
+          <label class="login-remember"><input type="checkbox" name="remember"> <span>Remember me</span></label>
+          <button class="login-submit" type="submit">Sign in</button>
         </form>
-        <p class="login-security-note">Your staff account keeps this workspace secure.</p>
+        <p class="login-security-note">Staff only see what their role allows.</p>
       </div>
     </section>
   </main>
+  <script>
+    const passwordInput = document.getElementById("login-password");
+    const passwordToggle = document.querySelector(".login-password-toggle");
+    passwordToggle.addEventListener("click", () => {
+      const showing = passwordInput.type === "password";
+      passwordInput.type = showing ? "text" : "password";
+      passwordToggle.textContent = showing ? "Hide" : "Show";
+      passwordToggle.setAttribute("aria-pressed", String(showing));
+    });
+  </script>
 </body>
 </html>
