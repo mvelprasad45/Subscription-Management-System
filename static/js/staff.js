@@ -46,6 +46,90 @@
     }
   });
 
+  const reportSvgNamespace = "http://www.w3.org/2000/svg";
+  const reportSvg = (tag, attributes = {}) => {
+    const element = document.createElementNS(reportSvgNamespace, tag);
+    Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value));
+    return element;
+  };
+  const readReportData = (id) => {
+    const element = document.getElementById(id);
+    if (!element) return null;
+    try {
+      return JSON.parse(element.textContent);
+    } catch (error) {
+      console.error(`Could not read report data in ${id}.`, error);
+      return null;
+    }
+  };
+  const revenueChart = document.getElementById("report-revenue-chart");
+  const reportRevenue = readReportData("report-revenue-data");
+  if (revenueChart && Array.isArray(reportRevenue) && reportRevenue.length) {
+    const width = 720;
+    const height = 250;
+    const left = 58;
+    const right = 18;
+    const top = 18;
+    const bottom = 42;
+    const plotHeight = height - top - bottom;
+    const plotWidth = width - left - right;
+    const maxValue = Math.max(...reportRevenue.map((item) => Number(item.total) || 0), 1);
+    for (let tick = 0; tick <= 3; tick += 1) {
+      const y = top + (plotHeight * tick) / 3;
+      const line = reportSvg("line", { x1: left, y1: y, x2: width - right, y2: y, class: "report-grid-line" });
+      const label = reportSvg("text", { x: left - 8, y: y + 3, class: "report-chart-label", "text-anchor": "end" });
+      label.textContent = `$${Math.round(maxValue * (1 - tick / 3))}`;
+      revenueChart.append(line, label);
+    }
+    const step = plotWidth / reportRevenue.length;
+    const barWidth = Math.min(42, step * 0.58);
+    reportRevenue.forEach((item, index) => {
+      const value = Number(item.total) || 0;
+      const barHeight = (value / maxValue) * (plotHeight - 8);
+      const x = left + step * index + (step - barWidth) / 2;
+      const y = top + plotHeight - barHeight;
+      revenueChart.append(reportSvg("rect", {
+        x, y, width: barWidth, height: Math.max(barHeight, 1), class: "report-chart-bar",
+      }));
+      const valueLabel = reportSvg("text", {
+        x: x + barWidth / 2, y: Math.max(y - 6, top + 8), class: "report-chart-value", "text-anchor": "middle",
+      });
+      valueLabel.textContent = `$${value.toFixed(0)}`;
+      const monthLabel = reportSvg("text", {
+        x: x + barWidth / 2, y: height - 14, class: "report-chart-label", "text-anchor": "middle",
+      });
+      monthLabel.textContent = String(item.month).replace(/ \d{4}$/, "");
+      revenueChart.append(valueLabel, monthLabel);
+    });
+  }
+
+  const drawReportBars = (chartId, dataId, money) => {
+    const chart = document.getElementById(chartId);
+    const data = readReportData(dataId);
+    if (!chart || !data || typeof data !== "object") return;
+    const entries = Object.entries(data);
+    const width = 440;
+    const left = 118;
+    const right = 42;
+    const rowHeight = 42;
+    const max = Math.max(...entries.map(([, value]) => Number(value) || 0), 1);
+    entries.forEach(([labelText, rawValue], index) => {
+      const value = Number(rawValue) || 0;
+      const y = 24 + index * rowHeight;
+      const label = reportSvg("text", { x: left - 10, y: y + 13, class: "report-chart-label", "text-anchor": "end" });
+      label.textContent = labelText;
+      const bar = reportSvg("rect", {
+        x: left, y, width: Math.max(((width - left - right) * value) / max, 1),
+        height: 20, class: "report-chart-bar",
+      });
+      const valueText = reportSvg("text", { x: width - right + 8, y: y + 14, class: "report-chart-value" });
+      valueText.textContent = money ? `$${value.toFixed(0)}` : String(value);
+      chart.append(label, bar, valueText);
+    });
+  };
+  drawReportBars("report-invoice-chart", "report-invoice-data", false);
+  drawReportBars("report-method-chart", "report-method-data", true);
+
   const quotationForm = document.getElementById("quotation-form");
   if (quotationForm) {
     const productSelect = document.getElementById("quotation-product");

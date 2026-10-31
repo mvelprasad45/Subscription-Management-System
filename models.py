@@ -196,6 +196,7 @@ class Payment(db.Model):
     payment_date = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
     method = db.Column(db.String(40), nullable=False)
     transaction_reference = db.Column(db.String(120), unique=True)
+    notes = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default="pending")
 
     invoice = db.relationship("Invoice", back_populates="payments")

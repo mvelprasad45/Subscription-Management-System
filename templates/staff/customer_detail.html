@@ -49,9 +49,9 @@
 
 <section class="panel detail-records">
   <div class="panel-heading"><div><h2>Payments</h2><p>{{ payments|length }} payment(s)</p></div></div>
-  <div class="table-scroll"><table class="records-table"><thead><tr><th>Invoice</th><th>Date</th><th>Method</th><th>Reference</th><th>Status</th><th>Amount</th></tr></thead><tbody>
-    {% for item in payments %}<tr><td>{{ item.invoice.invoice_number }}</td><td>{{ item.payment_date.strftime("%b %d, %Y") }}</td><td>{{ item.method|title }}</td><td>{{ item.transaction_reference or "—" }}</td><td><span class="status-badge status-{{ item.status }}">{{ item.status|title }}</span></td><td>{{ item.amount|currency }}</td></tr>
-    {% else %}<tr><td class="table-empty" colspan="6">No payments.</td></tr>{% endfor %}
+  <div class="table-scroll"><table class="records-table"><thead><tr><th>Invoice</th><th>Date</th><th>Method</th><th>Reference</th><th>Status</th><th>Notes</th><th>Amount</th></tr></thead><tbody>
+    {% for item in payments %}<tr><td>{{ item.invoice.invoice_number }}</td><td>{{ item.payment_date.strftime("%b %d, %Y") }}</td><td>{{ item.method|replace("_", " ")|title }}</td><td>{{ item.transaction_reference or "—" }}</td><td><span class="status-badge status-{{ item.status }}">{{ item.status|title }}</span></td><td>{{ item.notes or "—" }}</td><td>{{ item.amount|currency }}</td></tr>
+    {% else %}<tr><td class="table-empty" colspan="7">No payments.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
 {% endblock %}

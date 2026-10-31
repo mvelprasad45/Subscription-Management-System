@@ -4,7 +4,7 @@ import hmac
 import re
 import calendar
 from datetime import date, datetime, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import click
 from flask import Flask, abort, flash, make_response, redirect, render_template, render_template_string, request, session, url_for
@@ -75,6 +75,47 @@ def _invoice_status_label(status):
     return {"open": "Confirmed", "overdue": "Confirmed", "void": "Draft"}.get(
         status, status.title()
     )
+
+
+def _invoice_paid_amount(invoice):
+    return sum(
+        (payment.amount for payment in invoice.payments if payment.status == "succeeded"),
+        Decimal("0.00"),
+    )
+
+
+def _invoice_balance(invoice):
+    return max(Decimal(invoice.total) - _invoice_paid_amount(invoice), Decimal("0.00"))
+
+
+def _available_payment_methods():
+    existing = {
+        method
+        for (method,) in db.session.query(Payment.method).distinct().all()
+        if method
+    }
+    return tuple(sorted(existing | {"card", "bank_transfer", "cash", "other"}))
+
+
+def _parse_report_date(value, default):
+    if not value:
+        return default
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        abort(400, description="Report dates must use YYYY-MM-DD format.")
+
+
+def _report_months(start_date, end_date):
+    cursor = start_date.replace(day=1)
+    end_month = end_date.replace(day=1)
+    months = []
+    while cursor <= end_month:
+        months.append(cursor)
+        next_month = cursor.month % 12 + 1
+        next_year = cursor.year + (cursor.month // 12)
+        cursor = date(next_year, next_month, 1)
+    return months
 
 
 def _pdf_escape(value):
@@ -287,6 +328,11 @@ def create_app(test_config=None):
                         f"{column_name} {column_definition}"
                     )
                 )
+        payment_columns = {
+            column["name"] for column in inspect(db.engine).get_columns("payments")
+        }
+        if "notes" not in payment_columns:
+            db.session.execute(text("ALTER TABLE payments ADD COLUMN notes TEXT"))
         db.session.execute(
             text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS "
@@ -1273,14 +1319,17 @@ def create_app(test_config=None):
         ).filter_by(id=invoice_id).first_or_404()
         transitions = {
             "draft": ("confirmed",),
-            "open": ("paid",),
-            "overdue": ("paid",),
         }
         return render_template(
             "staff/invoice_detail.html",
             invoice=invoice,
             payment_status=_invoice_status_label(invoice.status),
             allowed_transitions=transitions.get(invoice.status, ()),
+            payments=sorted(
+                invoice.payments, key=lambda payment: payment.payment_date, reverse=True
+            ),
+            paid_amount=_invoice_paid_amount(invoice),
+            remaining_balance=_invoice_balance(invoice),
         )
 
     @app.route("/staff/invoices/<int:invoice_id>/status", methods=["POST"])
@@ -1289,8 +1338,6 @@ def create_app(test_config=None):
         invoice = Invoice.query.filter_by(id=invoice_id).first_or_404()
         transitions = {
             "draft": ("confirmed",),
-            "open": ("paid",),
-            "overdue": ("paid",),
         }
         requested_status = request.form.get("status", "").strip().lower()
         allowed = transitions.get(invoice.status, ())
@@ -1298,8 +1345,6 @@ def create_app(test_config=None):
             flash("That invoice status transition is not allowed.", "error")
         else:
             invoice.status = "open" if requested_status == "confirmed" else requested_status
-            if requested_status == "paid":
-                invoice.paid_at = datetime.now().astimezone()
             db.session.commit()
             flash(f"Invoice marked {requested_status}.", "success")
         return redirect(url_for("staff_invoice_detail", invoice_id=invoice.id))
@@ -1332,12 +1377,244 @@ def create_app(test_config=None):
     @app.route("/staff/payments")
     @role_required("staff")
     def staff_payments():
-        return render_template("staff/placeholder.html", title="Payments", description="Review payment activity and transaction status here.")
+        search = request.args.get("q", "").strip()
+        method = request.args.get("method", "").strip().lower()
+        date_from_value = request.args.get("from", "").strip()
+        date_to_value = request.args.get("to", "").strip()
+        date_from = _parse_report_date(date_from_value, None)
+        date_to = _parse_report_date(date_to_value, None)
+        if date_from and date_to and date_from > date_to:
+            abort(400, description="Start date must be on or before end date.")
+        page = max(request.args.get("page", 1, type=int), 1)
+        per_page = 10
+        query = Payment.query.join(Invoice).join(Customer).options(
+            selectinload(Payment.invoice).selectinload(Invoice.customer)
+        )
+        if search:
+            matches = [
+                Invoice.invoice_number.ilike(f"%{search}%"),
+                Customer.name.ilike(f"%{search}%"),
+            ]
+            if search.isdigit():
+                matches.extend((Payment.id == int(search), Invoice.id == int(search)))
+            query = query.filter(or_(*matches))
+        payment_methods = _available_payment_methods()
+        if method in {value.lower() for value in payment_methods}:
+            query = query.filter(func.lower(Payment.method) == method)
+        else:
+            method = ""
+        if date_from:
+            query = query.filter(Payment.payment_date >= datetime.combine(date_from, datetime.min.time()))
+        if date_to:
+            query = query.filter(Payment.payment_date < datetime.combine(date_to + timedelta(days=1), datetime.min.time()))
+        total = query.count()
+        pages = max((total + per_page - 1) // per_page, 1)
+        page = min(page, pages)
+        payments = (
+            query.order_by(Payment.payment_date.desc(), Payment.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+        return render_template(
+            "staff/payments.html",
+            payments=payments,
+            search=search,
+            method=method,
+            date_from=date_from_value,
+            date_to=date_to_value,
+            payment_methods=payment_methods,
+            page=page,
+            pages=pages,
+            total=total,
+        )
+
+    @app.route("/staff/payments/new", methods=["GET", "POST"])
+    @role_required("staff")
+    def staff_payment_create():
+        invoices = (
+            Invoice.query.filter(Invoice.status.in_(("open", "overdue")))
+            .options(
+                selectinload(Invoice.customer),
+                selectinload(Invoice.payments),
+            )
+            .order_by(Invoice.due_date.asc())
+            .all()
+        )
+        payable_invoices = [
+            invoice for invoice in invoices if _invoice_balance(invoice) > 0
+        ]
+        form_data = request.form if request.method == "POST" else request.args
+        if request.method == "POST":
+            errors = {}
+            invoice_id = _positive_int(request.form.get("invoice_id"))
+            invoice = db.session.get(Invoice, invoice_id) if invoice_id else None
+            if invoice is None:
+                errors["invoice_id"] = "Choose a valid unpaid invoice."
+            elif invoice.status == "paid":
+                errors["invoice_id"] = "Paid invoices cannot be paid again."
+            elif invoice.status not in ("open", "overdue"):
+                errors["invoice_id"] = "Only confirmed unpaid invoices can receive payments."
+
+            try:
+                amount = Decimal(request.form.get("amount", "").strip())
+                if not amount.is_finite() or amount <= 0:
+                    errors["amount"] = "Amount must be greater than zero."
+                elif amount != amount.quantize(Decimal("0.01")):
+                    errors["amount"] = "Amount can have no more than two decimal places."
+            except InvalidOperation:
+                amount = Decimal("0.00")
+                errors["amount"] = "Enter a valid payment amount."
+
+            method = request.form.get("method", "").strip()
+            methods = _available_payment_methods()
+            if method not in methods:
+                errors["method"] = "Choose a valid payment method."
+            try:
+                payment_date = date.fromisoformat(request.form.get("payment_date", "").strip())
+            except ValueError:
+                payment_date = None
+                errors["payment_date"] = "Enter a valid payment date."
+            notes = request.form.get("notes", "").strip()
+            if len(notes) > 2000:
+                errors["notes"] = "Notes must be 2000 characters or fewer."
+            balance_before = _invoice_balance(invoice) if invoice is not None else Decimal("0.00")
+            if (
+                invoice is not None
+                and invoice.status in ("open", "overdue")
+                and amount.is_finite()
+                and amount > balance_before
+            ):
+                errors["amount"] = f"Amount cannot exceed the remaining balance of ${_invoice_balance(invoice):,.2f}."
+
+            if not errors:
+                payment = Payment(
+                    invoice_id=invoice.id,
+                    amount=amount,
+                    payment_date=datetime.combine(
+                        payment_date, datetime.now().astimezone().timetz()
+                    ),
+                    method=method,
+                    notes=notes or None,
+                    status="succeeded",
+                )
+                db.session.add(payment)
+                try:
+                    db.session.flush()
+                    if amount == balance_before:
+                        invoice.status = "paid"
+                        invoice.paid_at = payment.payment_date
+                    else:
+                        invoice.status = "open"
+                        invoice.paid_at = None
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+                    flash("Could not record this payment. Please try again.", "error")
+                else:
+                    flash("Payment recorded successfully.", "success")
+                    return redirect(url_for("staff_invoice_detail", invoice_id=invoice.id))
+
+            for message in errors.values():
+                flash(message, "error")
+        return render_template(
+            "staff/payment_form.html",
+            invoices=payable_invoices,
+            invoice_balances={
+                invoice.id: float(_invoice_balance(invoice))
+                for invoice in payable_invoices
+            },
+            form_data=form_data,
+            today_iso=date.today().isoformat(),
+            methods=_available_payment_methods(),
+        )
 
     @app.route("/staff/reports")
     @role_required("staff")
     def staff_reports():
-        return render_template("staff/placeholder.html", title="Reports", description="Subscription and revenue reports will be available here.")
+        today = date.today()
+        default_from = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        for _ in range(4):
+            default_from = (default_from.replace(day=1) - timedelta(days=1)).replace(day=1)
+        from_value = request.args.get("from", "").strip()
+        to_value = request.args.get("to", "").strip()
+        date_from = _parse_report_date(from_value, default_from)
+        date_to = _parse_report_date(to_value, today)
+        if date_from > date_to:
+            abort(400, description="Start date must be on or before end date.")
+
+        range_start = datetime.combine(date_from, datetime.min.time())
+        range_end = datetime.combine(date_to + timedelta(days=1), datetime.min.time())
+        payments = Payment.query.filter(
+            Payment.status == "succeeded",
+            Payment.payment_date >= range_start,
+            Payment.payment_date < range_end,
+        ).all()
+        revenue = sum((payment.amount for payment in payments), Decimal("0.00"))
+
+        invoices = Invoice.query.filter(
+            Invoice.issue_date >= date_from,
+            Invoice.issue_date <= date_to,
+        ).all()
+        paid_invoice_count = sum(1 for invoice in invoices if invoice.status == "paid")
+        pending_invoice_count = sum(
+            1 for invoice in invoices if invoice.status == "open"
+        )
+        overdue_invoice_count = sum(
+            1 for invoice in invoices if invoice.status == "overdue"
+        )
+        active_subscription_count = Subscription.query.filter(
+            Subscription.lifecycle_status == "active",
+            Subscription.start_date <= date_to,
+            or_(Subscription.end_date.is_(None), Subscription.end_date >= date_from),
+        ).count()
+
+        methods = _available_payment_methods()
+        payment_summary = {
+            method: {
+                "count": sum(1 for payment in payments if payment.method == method),
+                "total": float(
+                    sum(
+                        (payment.amount for payment in payments if payment.method == method),
+                        Decimal("0.00"),
+                    )
+                ),
+            }
+            for method in methods
+        }
+        month_values = {month.strftime("%Y-%m"): Decimal("0.00") for month in _report_months(date_from, date_to)}
+        for payment in payments:
+            month_key = payment.payment_date.strftime("%Y-%m")
+            if month_key in month_values:
+                month_values[month_key] += payment.amount
+
+        invoice_status_data = {
+            "Draft": sum(1 for invoice in invoices if invoice.status == "draft"),
+            "Confirmed": sum(1 for invoice in invoices if invoice.status == "open"),
+            "Paid": paid_invoice_count,
+            "Overdue": overdue_invoice_count,
+        }
+        return render_template(
+            "staff/reports.html",
+            date_from=date_from,
+            date_to=date_to,
+            total_revenue=revenue,
+            active_subscriptions=active_subscription_count,
+            paid_invoices=paid_invoice_count,
+            pending_invoices=pending_invoice_count,
+            overdue_invoices=overdue_invoice_count,
+            payment_count=len(payments),
+            payment_summary=payment_summary,
+            revenue_data=[
+                {"month": month.strftime("%b %Y"), "total": float(month_values[month.strftime("%Y-%m")])}
+                for month in _report_months(date_from, date_to)
+            ],
+            invoice_status_data=invoice_status_data,
+            payment_method_data={
+                method.replace("_", " ").title(): summary["total"]
+                for method, summary in payment_summary.items()
+            },
+        )
 
     return app
 

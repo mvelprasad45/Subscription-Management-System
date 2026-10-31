@@ -23,11 +23,19 @@
   <div class="table-scroll invoice-lines"><table class="records-table"><thead><tr><th>Description</th><th>Quantity</th><th>Unit amount</th><th>Amount</th></tr></thead><tbody>
     <tr><td>{{ invoice.subscription.plan.name if invoice.subscription else "Subscription services" }}</td><td>{{ invoice.subscription.quantity if invoice.subscription else 1 }}</td><td>{{ invoice.subscription.plan.price|currency if invoice.subscription else invoice.subtotal|currency }}</td><td>{{ invoice.subtotal|currency }}</td></tr>
   </tbody></table></div>
-  <dl class="quote-total-lines invoice-totals"><div><dt>Subtotal</dt><dd>{{ invoice.subtotal|currency }}</dd></div><div><dt>Tax</dt><dd>{{ invoice.tax|currency }}</dd></div><div class="quote-grand-total"><dt>Total due</dt><dd>{{ invoice.total|currency }}</dd></div></dl>
+  <dl class="quote-total-lines invoice-totals"><div><dt>Subtotal</dt><dd>{{ invoice.subtotal|currency }}</dd></div><div><dt>Tax</dt><dd>{{ invoice.tax|currency }}</dd></div><div><dt>Invoice total</dt><dd>{{ invoice.total|currency }}</dd></div><div><dt>Payments received</dt><dd>{{ paid_amount|currency }}</dd></div><div class="quote-grand-total"><dt>Remaining balance</dt><dd>{{ remaining_balance|currency }}</dd></div></dl>
   {% if invoice.paid_at %}<p class="paid-stamp">PAID · {{ invoice.paid_at.strftime("%B %d, %Y") }}</p>{% endif %}
+  <section class="invoice-payment-history">
+    <div class="panel-heading"><div><h2>Payment history</h2><p>{{ payments|length }} payment(s) recorded</p></div></div>
+    <div class="table-scroll"><table class="records-table"><thead><tr><th>Date</th><th>Method</th><th>Status</th><th>Notes</th><th>Amount</th></tr></thead><tbody>
+      {% for payment in payments %}<tr><td>{{ payment.payment_date.strftime("%b %d, %Y") }}</td><td>{{ payment.method|replace("_", " ")|title }}</td><td><span class="status-badge status-{{ payment.status }}">{{ payment.status|title }}</span></td><td>{{ payment.notes or "—" }}</td><td>{{ payment.amount|currency }}</td></tr>
+      {% else %}<tr><td class="table-empty" colspan="5">No payments recorded.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
 </section>
 <div class="invoice-actions no-print">
   <a class="button button-secondary" href="{{ url_for('staff_invoices') }}">Back to invoices</a>
+  {% if remaining_balance > 0 and invoice.status in ("open", "overdue") %}<a class="button button-primary" href="{{ url_for('staff_payment_create', invoice_id=invoice.id) }}">Record payment</a>{% endif %}
   <button class="button button-secondary" type="button" onclick="window.print()">Print</button>
   <a class="button button-secondary" href="{{ url_for('staff_invoice_pdf', invoice_id=invoice.id) }}">Download as PDF</a>
   {% if invoice.status != "paid" %}

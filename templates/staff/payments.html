@@ -1,0 +1,55 @@
+{% extends "staff/base.html" %}
+
+{% block title %}Payments{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">BILLING MANAGEMENT</p>
+    <h1>Payments</h1>
+    <p class="page-subtitle">Review received payments and outstanding invoice balances.</p>
+  </div>
+  <a class="button button-primary" href="{{ url_for('staff_payment_create') }}">Record payment</a>
+</section>
+<section class="panel records-panel">
+  <form class="records-toolbar" method="get" action="{{ url_for('staff_payments') }}">
+    <label class="filter-search">
+      <span class="sr-only">Search payments</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.2 4.2"/></svg>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search payment ID, invoice or customer">
+    </label>
+    <label class="filter-select"><span class="sr-only">Filter by payment method</span><select name="method">
+      <option value="">All methods</option>
+      {% for value in payment_methods %}<option value="{{ value }}"{% if method == value %} selected{% endif %}>{{ value|replace("_", " ")|title }}</option>{% endfor %}
+    </select></label>
+    <label class="date-filter">From <input type="date" name="from" value="{{ date_from }}"></label>
+    <label class="date-filter">To <input type="date" name="to" value="{{ date_to }}"></label>
+    <button class="button button-secondary" type="submit">Apply filters</button>
+    {% if search or method or date_from or date_to %}<a class="clear-filters" href="{{ url_for('staff_payments') }}">Clear</a>{% endif %}
+  </form>
+  <div class="table-scroll"><table class="records-table wide-table">
+    <thead><tr><th>Payment ID</th><th>Invoice number</th><th>Customer</th><th>Payment method</th><th>Amount</th><th>Payment date</th><th>Notes</th></tr></thead>
+    <tbody>
+      {% for payment in payments %}
+      <tr>
+        <td>#{{ payment.id }}</td>
+        <td><a class="record-name" href="{{ url_for('staff_invoice_detail', invoice_id=payment.invoice.id) }}">{{ payment.invoice.invoice_number }}</a></td>
+        <td>{{ payment.invoice.customer.name }}</td>
+        <td>{{ payment.method|replace("_", " ")|title }}</td>
+        <td>{{ payment.amount|currency }}</td>
+        <td>{{ payment.payment_date.strftime("%b %d, %Y") }}</td>
+        <td>{{ payment.notes or "—" }}</td>
+      </tr>
+      {% else %}<tr><td class="table-empty" colspan="7">No payments match these filters.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <div class="records-footer">
+    <span>Showing {{ payments|length }} of {{ total }} payments</span>
+    <nav class="pagination" aria-label="Payment pages">
+      {% if page > 1 %}<a href="{{ url_for('staff_payments', q=search, method=method, from=date_from, to=date_to, page=page-1) }}" aria-label="Previous page">‹</a>{% else %}<span class="disabled">‹</span>{% endif %}
+      <span class="page-indicator">Page {{ page }} of {{ pages }}</span>
+      {% if page < pages %}<a href="{{ url_for('staff_payments', q=search, method=method, from=date_from, to=date_to, page=page+1) }}" aria-label="Next page">›</a>{% else %}<span class="disabled">›</span>{% endif %}
+    </nav>
+  </div>
+</section>
+{% endblock %}

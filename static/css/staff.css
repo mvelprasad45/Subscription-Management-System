@@ -115,7 +115,7 @@ h1 { margin-bottom: 6px; color: #1b2940; font-family: var(--font-heading); font-
 .chart-total { position: absolute; top: 1px; left: 21px; z-index: 1; display: grid; gap: 3px; }
 .chart-total span { color: #a0a9b7; font-size: 9px; }
 .chart-total strong { color: #25334a; font-family: var(--font-heading); font-size: 18px; }
-.revenue-chart { width: 100%; height: auto; margin-top: 32px; overflow: visible; }
+.revenue-chart { width: 100%; height: auto; margin-top: 58px; overflow: visible; }
 .chart-grid-line { stroke: #edf1f6; stroke-dasharray: 3 5; stroke-width: 1; }
 .chart-axis-label { fill: #a0a9b7; font-family: var(--font-body); font-size: 10px; }
 .chart-area { fill: url(#revenue-gradient); }
@@ -319,6 +319,35 @@ td:last-child, th:last-child { padding-right: 20px; }
 .flash-message { margin: 0; padding: 11px 13px; border: 1px solid transparent; border-radius: 8px; font-size: 11px; animation: fade-up .22s ease both; }
 .flash-success { border-color: #ccebdc; background: #eef9f3; color: #347d5e; }
 .flash-error { border-color: #f2d5d2; background: #fff4f2; color: #ad514b; }
+.date-filter { display: flex; align-items: center; gap: 7px; color: #8290a4; font-size: 10px; white-space: nowrap; }
+.date-filter input { min-height: 38px; padding: 7px 9px; border: 1px solid #e4e9f1; border-radius: 7px; background: #fff; color: #58667c; font: inherit; }
+.date-filter input:focus { border-color: #8eaceb; outline: 0; box-shadow: 0 0 0 3px #4778e814; }
+.report-filter-panel { padding: 14px 18px; margin-bottom: 15px; }
+.report-date-form { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.report-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; margin-bottom: 15px; }
+.report-stat { display: grid; min-width: 0; gap: 7px; padding: 17px 18px; animation: fade-up .35s ease both; }
+.report-stat > span { color: #8190a4; font-size: 10px; font-weight: 600; }
+.report-stat > strong { color: #26364f; font-family: var(--font-heading); font-size: 23px; }
+.report-stat > small { color: #a0a9b7; font-size: 9px; }
+.report-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.report-chart-panel { min-width: 0; padding-bottom: 15px; overflow: hidden; }
+.report-chart-wide { grid-column: 1 / -1; }
+.report-chart { display: block; width: 100%; height: auto; padding: 0 15px; overflow: visible; }
+.report-grid-line { stroke: #edf1f6; stroke-dasharray: 3 5; stroke-width: 1; }
+.report-chart-label { fill: #8d99aa; font-family: var(--font-body); font-size: 10px; }
+.report-chart-value { fill: #46556d; font-family: var(--font-heading); font-size: 10px; font-weight: 600; }
+.report-chart-bar { fill: #5a85e3; rx: 4; }
+.report-chart-bar:hover { fill: #386bd4; }
+.payment-summary-list { display: grid; gap: 8px; padding: 0 22px; }
+.payment-summary-list > div { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 8px 0; border-top: 1px solid #eef1f6; color: #64728a; font-size: 10px; }
+.payment-summary-list strong { color: #344158; }
+.payment-summary-list small { grid-column: 1 / -1; color: #9ba6b5; font-size: 9px; }
+.invoice-payment-history { margin: 4px 18px 18px; padding-top: 8px; border-top: 1px solid #edf0f5; }
+.invoice-payment-history .panel-heading { padding-right: 0; padding-left: 0; }
+.invoice-actions { flex-wrap: wrap; }
+.empty-state { padding: 35px 20px; text-align: center; }
+.empty-state h2 { color: #35435b; font-family: var(--font-heading); font-size: 17px; }
+.empty-state p { margin: 0 0 18px; color: #8794a7; font-size: 11px; }
 
 @media (max-width: 760px) {
   .records-toolbar { align-items: stretch; }
@@ -327,6 +356,10 @@ td:last-child, th:last-child { padding-right: 20px; }
   .filter-select select { width: 100%; }
   .records-toolbar > .button { flex: 1; }
   .quote-detail-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .report-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-chart-grid { grid-template-columns: minmax(0, 1fr); }
+  .report-chart-wide { grid-column: auto; }
+  .report-date-form { align-items: stretch; }
 }
 
 @media (max-width: 560px) {
@@ -336,6 +369,7 @@ td:last-child, th:last-child { padding-right: 20px; }
   .records-footer .pagination { align-self: flex-end; }
   .staff-form { padding-right: 14px; padding-left: 14px; }
   .form-grid, .detail-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .report-stat-grid { grid-template-columns: minmax(0, 1fr); }
   .form-field-wide, .detail-wide { grid-column: auto; }
   .detail-grid { padding-right: 15px; padding-left: 15px; }
   .quote-summary { padding-right: 12px; padding-left: 12px; }
