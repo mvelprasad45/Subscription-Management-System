@@ -21,7 +21,7 @@
     <div><dt>Plan</dt><dd>{{ subscription.plan.name }}</dd></div>
     <div><dt>Billing cycle</dt><dd>{{ subscription.plan.billing_cycle|replace("_", " ")|title }}</dd></div>
     <div><dt>Quantity</dt><dd>{{ subscription.quantity }}</dd></div>
-    <div><dt>Recurring amount</dt><dd>{{ subscription.amount|currency }}</dd></div>
+    <div><dt>Recurring amount</dt><dd>{{ subscription.amount|inr }}</dd></div>
     <div><dt>Start date</dt><dd>{{ subscription.start_date.strftime("%B %d, %Y") }}</dd></div>
     <div><dt>Expiry date</dt><dd>{{ subscription.end_date.strftime("%B %d, %Y") if subscription.end_date else "No end date set" }}</dd></div>
     <div><dt>Next renewal date</dt><dd>{{ subscription.next_billing_date.strftime("%B %d, %Y") if subscription.next_billing_date else "Not scheduled" }}</dd></div>
@@ -48,7 +48,7 @@
       <td><a class="record-name" href="{{ url_for('staff_invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a></td>
       <td>{{ invoice.billing_period_start.strftime("%b %d, %Y") if invoice.billing_period_start else "—" }} – {{ invoice.billing_period_end.strftime("%b %d, %Y") if invoice.billing_period_end else "—" }}</td>
       <td>{{ invoice.issue_date.strftime("%b %d, %Y") }}</td><td>{{ invoice.due_date.strftime("%b %d, %Y") }}</td>
-      <td><span class="status-badge status-{{ invoice.status }}">{{ invoice_status_labels[invoice.id] }}</span></td><td>{{ invoice.total|currency }}</td>
+      <td><span class="status-badge status-{{ invoice.status }}">{{ invoice_status_labels[invoice.id] }}</span></td><td>{{ invoice.total|inr }}</td>
     </tr>
     {% else %}<tr><td class="table-empty" colspan="6">No invoices have been generated.</td></tr>{% endfor %}
   </tbody></table></div>

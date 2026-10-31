@@ -26,10 +26,10 @@
   <section class="panel detail-panel">
     <div class="panel-heading"><div><h2>Price breakdown</h2><p>Tax and discount rules are not configured.</p></div></div>
     <dl class="quote-total-lines detail-prices">
-      <div><dt>Subtotal</dt><dd>{{ quotation.subtotal|currency }}</dd></div>
-      <div><dt>Tax</dt><dd>{{ quotation.tax|currency }}</dd></div>
-      <div><dt>Discount</dt><dd>−{{ quotation.discount|currency }}</dd></div>
-      <div class="quote-grand-total"><dt>Total</dt><dd>{{ quotation.amount|currency }}</dd></div>
+      <div><dt>Subtotal</dt><dd>{{ quotation.subtotal|inr }}</dd></div>
+      <div><dt>Tax</dt><dd>{{ quotation.tax|inr }}</dd></div>
+      <div><dt>Discount</dt><dd>−{{ quotation.discount|inr }}</dd></div>
+      <div class="quote-grand-total"><dt>Total</dt><dd>{{ quotation.amount|inr }}</dd></div>
     </dl>
     {% if allowed_transitions %}
     <div class="status-transition">

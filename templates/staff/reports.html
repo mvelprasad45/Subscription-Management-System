@@ -18,7 +18,7 @@
   </form>
 </section>
 <section class="report-stat-grid" aria-label="Report summary">
-  <article class="panel report-stat"><span>Total revenue</span><strong>{{ total_revenue|currency }}</strong><small>Successful payments in range</small></article>
+  <article class="panel report-stat"><span>Total revenue</span><strong>{{ total_revenue|inr }}</strong><small>Successful payments in range</small></article>
   <article class="panel report-stat"><span>Active subscriptions</span><strong>{{ active_subscriptions }}</strong><small>Active during selected range</small></article>
   <article class="panel report-stat"><span>Paid invoices</span><strong>{{ paid_invoices }}</strong><small>Issued in selected range</small></article>
   <article class="panel report-stat"><span>Pending invoices</span><strong>{{ pending_invoices }}</strong><small>Confirmed, not overdue</small></article>
@@ -33,16 +33,16 @@
   </article>
   <article class="panel report-chart-panel">
     <div class="panel-heading"><div><h2>Invoices by status</h2><p>Invoice issue dates in the selected range.</p></div></div>
-    <svg id="report-invoice-chart" class="report-chart report-bar-chart" viewBox="0 0 440 250" role="img" aria-label="Invoices by status"></svg>
+    <svg id="report-invoice-chart" class="report-chart report-bar-chart" viewBox="0 0 520 250" role="img" aria-label="Invoices by status"></svg>
     <script type="application/json" id="report-invoice-data">{{ invoice_status_data|tojson }}</script>
   </article>
   <article class="panel report-chart-panel">
     <div class="panel-heading"><div><h2>Payments by method</h2><p>Successful payment amounts in the selected range.</p></div></div>
-    <svg id="report-method-chart" class="report-chart report-bar-chart" viewBox="0 0 440 250" role="img" aria-label="Payments by method"></svg>
+    <svg id="report-method-chart" class="report-chart report-bar-chart" viewBox="0 0 520 250" role="img" aria-label="Payments by method"></svg>
     <script type="application/json" id="report-method-data">{{ payment_method_data|tojson }}</script>
     <div class="payment-summary-list">
       {% for method, summary in payment_summary.items() %}
-      <div><span>{{ method|replace("_", " ")|title }}</span><strong>{{ summary.total|currency }}</strong><small>{{ summary.count }} payment(s)</small></div>
+      <div><span>{{ method|replace("_", " ")|title }}</span><strong>{{ summary.total|inr }}</strong><small>{{ summary.count }} payment(s)</small></div>
       {% endfor %}
     </div>
   </article>

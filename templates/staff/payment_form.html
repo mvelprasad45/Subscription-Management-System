@@ -20,7 +20,7 @@
         <option value="">Select an invoice</option>
         {% for invoice in invoices %}
         <option value="{{ invoice.id }}"{% if form_data.get("invoice_id", "")|string == invoice.id|string %} selected{% endif %}>
-          {{ invoice.invoice_number }} · {{ invoice.customer.name }} · Balance {{ invoice_balances[invoice.id]|currency }}
+          {{ invoice.invoice_number }} · {{ invoice.customer.name }} · Balance {{ invoice_balances[invoice.id]|inr }}
         </option>
         {% endfor %}
       </select>

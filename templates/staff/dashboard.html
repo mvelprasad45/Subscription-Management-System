@@ -33,7 +33,7 @@
   </article>
   <article class="metric-card">
     <div class="metric-top"><span class="metric-icon icon-green"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg></span><span class="metric-trend trend-positive">Received</span></div>
-    <p class="metric-label">Payments Received</p><p class="metric-value metric-currency">{{ payments_received|currency }}</p>
+    <p class="metric-label">Payments Received</p><p class="metric-value metric-currency">{{ payments_received|inr }}</p>
     <p class="metric-note">Successful payments to date</p>
   </article>
 </section>
@@ -45,7 +45,7 @@
       <span class="panel-period"><span class="period-dot"></span> Last 6 months</span>
     </div>
     <div class="chart-wrap">
-      <div class="chart-total"><span>Revenue received</span><strong>{{ payments_received|currency }}</strong></div>
+      <div class="chart-total"><span>Revenue received</span><strong>{{ payments_received|inr }}</strong></div>
       <svg id="revenue-chart" class="revenue-chart" viewBox="0 0 720 230" role="img" aria-label="Revenue received by month"></svg>
       <script type="application/json" id="revenue-data">{{ revenue_data|tojson }}</script>
     </div>
@@ -105,7 +105,7 @@
         <thead><tr><th>Invoice</th><th>Customer</th><th>Due date</th><th>Amount</th><th>Status</th></tr></thead>
         <tbody>
           {% for invoice in pending_invoices %}
-          <tr><td><strong>{{ invoice.invoice_number }}</strong></td><td>{{ invoice.customer.name }}</td><td class="muted-cell">{{ invoice.due_date.strftime("%b %d, %Y") }}</td><td><strong>{{ invoice.total|currency }}</strong></td><td><span class="status-badge status-{{ invoice.status }}">{{ invoice.status|capitalize }}</span></td></tr>
+          <tr><td><strong>{{ invoice.invoice_number }}</strong></td><td>{{ invoice.customer.name }}</td><td class="muted-cell">{{ invoice.due_date.strftime("%b %d, %Y") }}</td><td><strong>{{ invoice.total|inr }}</strong></td><td><span class="status-badge status-{{ invoice.status }}">{{ invoice.status|capitalize }}</span></td></tr>
           {% else %}<tr><td class="table-empty" colspan="5">You're all caught up on payments.</td></tr>{% endfor %}
         </tbody>
       </table>

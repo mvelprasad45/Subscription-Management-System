@@ -7,7 +7,7 @@
   <div>
     <p class="eyebrow"><a href="{{ url_for('staff_subscription_detail', subscription_id=subscription.id) }}">SUBSCRIPTION</a> / NEW INVOICE</p>
     <h1>Generate invoice</h1>
-    <p class="page-subtitle">{{ subscription.customer.name }} · {{ subscription.subscription_code }} · {{ subscription.amount|currency }}</p>
+    <p class="page-subtitle">{{ subscription.customer.name }} · {{ subscription.subscription_code }} · {{ subscription.amount|inr }}</p>
   </div>
 </section>
 <section class="panel form-panel">
@@ -18,7 +18,7 @@
       <label class="form-field"><span>Billing period end <b>*</b></span><input type="date" name="billing_period_end" required value="{{ form_data.get('billing_period_end', default_period_end) }}"></label>
       <label class="form-field"><span>Due date <b>*</b></span><input type="date" name="due_date" min="{{ today_iso }}" required value="{{ form_data.get('due_date', default_due_date) }}"></label>
     </div>
-    <div class="invoice-generation-note">An invoice for {{ subscription.amount|currency }} will be created. A subscription and billing-period uniqueness constraint prevents duplicate invoices.</div>
+    <div class="invoice-generation-note">An invoice for {{ subscription.amount|inr }} will be created. A subscription and billing-period uniqueness constraint prevents duplicate invoices.</div>
     <div class="form-actions"><a class="button button-secondary" href="{{ url_for('staff_subscription_detail', subscription_id=subscription.id) }}">Cancel</a><button class="button button-primary" type="submit">Generate invoice</button></div>
   </form>
 </section>

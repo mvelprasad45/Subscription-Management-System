@@ -1,4 +1,17 @@
 (() => {
+  const inrFormatter = new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const formatINR = (value) => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) {
+      throw new TypeError("INR formatting requires a finite number.");
+    }
+    return `₹${inrFormatter.format(amount)}`;
+  };
+  window.formatINR = formatINR;
+
   const body = document.body;
   const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
   const sidebarClose = document.querySelector("[data-sidebar-close]");
@@ -67,7 +80,7 @@
   if (revenueChart && Array.isArray(reportRevenue) && reportRevenue.length) {
     const width = 720;
     const height = 250;
-    const left = 58;
+    const left = 130;
     const right = 18;
     const top = 18;
     const bottom = 42;
@@ -78,7 +91,7 @@
       const y = top + (plotHeight * tick) / 3;
       const line = reportSvg("line", { x1: left, y1: y, x2: width - right, y2: y, class: "report-grid-line" });
       const label = reportSvg("text", { x: left - 8, y: y + 3, class: "report-chart-label", "text-anchor": "end" });
-      label.textContent = `$${Math.round(maxValue * (1 - tick / 3))}`;
+      label.textContent = formatINR(maxValue * (1 - tick / 3));
       revenueChart.append(line, label);
     }
     const step = plotWidth / reportRevenue.length;
@@ -94,12 +107,14 @@
       const valueLabel = reportSvg("text", {
         x: x + barWidth / 2, y: Math.max(y - 6, top + 8), class: "report-chart-value", "text-anchor": "middle",
       });
-      valueLabel.textContent = `$${value.toFixed(0)}`;
+      valueLabel.textContent = formatINR(value);
       const monthLabel = reportSvg("text", {
         x: x + barWidth / 2, y: height - 14, class: "report-chart-label", "text-anchor": "middle",
       });
       monthLabel.textContent = String(item.month).replace(/ \d{4}$/, "");
-      revenueChart.append(valueLabel, monthLabel);
+      const tooltip = reportSvg("title");
+      tooltip.textContent = `${item.month}: ${formatINR(value)}`;
+      revenueChart.append(valueLabel, monthLabel, tooltip);
     });
   }
 
@@ -108,9 +123,9 @@
     const data = readReportData(dataId);
     if (!chart || !data || typeof data !== "object") return;
     const entries = Object.entries(data);
-    const width = 440;
+    const width = 520;
     const left = 118;
-    const right = 42;
+    const right = 116;
     const rowHeight = 42;
     const max = Math.max(...entries.map(([, value]) => Number(value) || 0), 1);
     entries.forEach(([labelText, rawValue], index) => {
@@ -122,8 +137,15 @@
         x: left, y, width: Math.max(((width - left - right) * value) / max, 1),
         height: 20, class: "report-chart-bar",
       });
-      const valueText = reportSvg("text", { x: width - right + 8, y: y + 14, class: "report-chart-value" });
-      valueText.textContent = money ? `$${value.toFixed(0)}` : String(value);
+      if (money) {
+        const tooltip = reportSvg("title");
+        tooltip.textContent = `${labelText}: ${formatINR(value)}`;
+        bar.append(tooltip);
+      }
+      const valueText = reportSvg("text", {
+        x: width - 4, y: y + 14, class: "report-chart-value", "text-anchor": "end",
+      });
+      valueText.textContent = money ? formatINR(value) : String(value);
       chart.append(label, bar, valueText);
     });
   };
@@ -163,11 +185,10 @@
       const subtotal = selectedPlan ? Number(selectedPlan.price) * quantity : 0;
       const discount = subtotal * (Number(quotationForm.dataset.discountRate) || 0) / 100;
       const tax = (subtotal - discount) * (Number(quotationForm.dataset.taxRate) || 0) / 100;
-      const money = (value) => `$${value.toFixed(2)}`;
-      document.getElementById("quote-subtotal").textContent = money(subtotal);
-      document.getElementById("quote-tax").textContent = money(tax);
-      document.getElementById("quote-discount").textContent = `−${money(discount)}`;
-      document.getElementById("quote-total").textContent = money(subtotal + tax - discount);
+      document.getElementById("quote-subtotal").textContent = formatINR(subtotal);
+      document.getElementById("quote-tax").textContent = formatINR(tax);
+      document.getElementById("quote-discount").textContent = `−${formatINR(discount)}`;
+      document.getElementById("quote-total").textContent = formatINR(subtotal + tax - discount);
     };
 
     const selectedPlan = planData[planSelect.value];
@@ -205,7 +226,7 @@
   };
   const width = 720;
   const height = 230;
-  const left = 52;
+  const left = 120;
   const right = 12;
   const top = 18;
   const bottom = 32;
@@ -235,7 +256,7 @@
       createSvg("line", { x1: left, y1: y, x2: width - right, y2: y, class: "chart-grid-line" }),
     );
     const label = createSvg("text", { x: left - 10, y: y + 3, class: "chart-axis-label", "text-anchor": "end" });
-    label.textContent = `$${Math.round(value)}`;
+    label.textContent = formatINR(value);
     chart.append(label);
   }
 
@@ -246,8 +267,12 @@
   });
   chart.append(area, createSvg("polyline", { points: pointString, class: "chart-line" }));
 
-  points.forEach((point) => {
-    chart.append(createSvg("circle", { cx: point.x, cy: point.y, r: 4, class: "chart-point" }));
+  points.forEach((point, index) => {
+    const pointCircle = createSvg("circle", { cx: point.x, cy: point.y, r: 4, class: "chart-point" });
+    const tooltip = createSvg("title");
+    tooltip.textContent = `${point.month}: ${formatINR(months[index].total)}`;
+    pointCircle.append(tooltip);
+    chart.append(pointCircle);
     const label = createSvg("text", { x: point.x, y: height - 7, class: "chart-month-label" });
     label.textContent = point.month;
     chart.append(label);

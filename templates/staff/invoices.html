@@ -31,7 +31,7 @@
       <tr>
         <td><a class="record-name" href="{{ url_for('staff_invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a></td>
         <td>{{ invoice.customer.name }}</td><td>{{ invoice.issue_date.strftime("%b %d, %Y") }}</td><td>{{ invoice.due_date.strftime("%b %d, %Y") }}</td>
-        <td>{{ invoice.total|currency }}</td><td><span class="status-badge status-{{ invoice.status }}">{{ invoice_statuses[invoice.id] }}</span></td>
+        <td>{{ invoice.total|inr }}</td><td><span class="status-badge status-{{ invoice.status }}">{{ invoice_statuses[invoice.id] }}</span></td>
       </tr>
     {% else %}<tr><td class="table-empty" colspan="6">No invoices match these filters.</td></tr>{% endfor %}
     </tbody>

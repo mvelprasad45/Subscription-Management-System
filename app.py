@@ -5,10 +5,16 @@ import re
 import calendar
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from io import BytesIO
 
 import click
 from flask import Flask, abort, flash, make_response, redirect, render_template, request, session, url_for
 from functools import wraps
+from reportlab.lib.colors import HexColor
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 from sqlalchemy import and_, case, func, inspect, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
@@ -106,6 +112,20 @@ def _parse_report_date(value, default):
         abort(400, description="Report dates must use YYYY-MM-DD format.")
 
 
+def format_inr(value):
+    amount = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    integer_part, decimal_part = f"{abs(amount):.2f}".split(".")
+    if len(integer_part) > 3:
+        prefix = integer_part[:-3]
+        groups = []
+        while prefix:
+            groups.insert(0, prefix[-2:])
+            prefix = prefix[:-2]
+        integer_part = ",".join((*groups, integer_part[-3:]))
+    sign = "-" if amount < 0 else ""
+    return f"{sign}₹{integer_part}.{decimal_part}"
+
+
 def _report_months(start_date, end_date):
     cursor = start_date.replace(day=1)
     end_month = end_date.replace(day=1)
@@ -118,10 +138,6 @@ def _report_months(start_date, end_date):
     return months
 
 
-def _pdf_escape(value):
-    return str(value).encode("ascii", "replace").decode("ascii").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
 def _invoice_pdf(invoice):
     lines = [
         "INVOICE",
@@ -132,51 +148,36 @@ def _invoice_pdf(invoice):
         f"Due date: {invoice.due_date:%B %d, %Y}",
         f"Billing period: {invoice.billing_period_start or '-'} to {invoice.billing_period_end or '-'}",
         f"Status: {_invoice_status_label(invoice.status)}",
-        f"Subtotal: ${invoice.subtotal:,.2f}",
-        f"Tax: ${invoice.tax:,.2f}",
-        f"Total: ${invoice.total:,.2f}",
+        f"Subtotal: {format_inr(invoice.subtotal)}",
+        f"Tax: {format_inr(invoice.tax)}",
+        f"Total: {format_inr(invoice.total)}",
     ]
-    stream = (
-        "q\n"
-        "0.102 0.082 0.188 rg\n"
-        "65 805 m 73.284 805 80 798.284 80 790 c "
-        "80 781.716 73.284 775 65 775 c "
-        "56.716 775 50 781.716 50 790 c "
-        "50 798.284 56.716 805 65 805 c h f\n"
-        "Q\n"
-        "BT\n/F2 18 Tf\n1 1 1 rg\n59 784 Td\n(C) Tj\nET\n"
-        "BT\n/F1 16 Tf\n0.102 0.082 0.188 rg\n92 785 Td\n(Brightloop) Tj\nET\n"
-        "BT\n/F1 12 Tf\n0 0 0 rg\n50 752 Td\n"
+    font_name = "BrightloopNotoSans"
+    font_path = os.path.join(
+        os.path.dirname(__file__), "static", "fonts", "NotoSans.ttf"
     )
-    for index, line in enumerate(lines):
-        if index:
-            stream += "0 -28 Td\n"
-        stream += f"({_pdf_escape(line)}) Tj\n"
-    stream += "ET"
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R /F2 6 0 R >> >> /Contents 5 0 R >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
-        f"<< /Length {len(stream.encode('ascii'))} >>\nstream\n{stream}\nendstream".encode("ascii"),
-    ]
-    pdf = bytearray(b"%PDF-1.4\n")
-    offsets = [0]
-    for index, body in enumerate(objects, start=1):
-        offsets.append(len(pdf))
-        pdf.extend(f"{index} 0 obj\n".encode("ascii"))
-        pdf.extend(body)
-        pdf.extend(b"\nendobj\n")
-    xref_offset = len(pdf)
-    pdf.extend(f"xref\n0 {len(offsets)}\n".encode("ascii"))
-    pdf.extend(b"0000000000 65535 f \n")
-    for offset in offsets[1:]:
-        pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
-    pdf.extend(
-        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode("ascii")
-    )
-    return bytes(pdf)
+    if font_name not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont(font_name, font_path))
+
+    output = BytesIO()
+    document = canvas.Canvas(output, pagesize=A4, pageCompression=1)
+    document.setTitle(f"Invoice {invoice.invoice_number}")
+    document.setFillColor(HexColor("#1a1530"))
+    document.circle(65, 790, 15, fill=1, stroke=0)
+    document.setFillColor(HexColor("#ffffff"))
+    document.setFont(font_name, 14)
+    document.drawCentredString(65, 785, "C")
+    document.setFillColor(HexColor("#1a1530"))
+    document.setFont(font_name, 16)
+    document.drawString(92, 784, "Brightloop")
+    document.setFillColor(HexColor("#000000"))
+    document.setFont(font_name, 11)
+    y = 752
+    for line in lines:
+        document.drawString(50, y, line)
+        y -= 25
+    document.save()
+    return output.getvalue()
 
 
 def _effective_quotation_status(quotation, today=None):
@@ -652,7 +653,7 @@ def create_app(test_config=None):
         for payment in Payment.query.order_by(Payment.payment_date.desc()).limit(5):
             activities.append({
                 "date": payment.payment_date.date(),
-                "label": f"Payment of ${payment.amount:,.2f} was {payment.status}",
+                "label": f"Payment of {format_inr(payment.amount)} was {payment.status}",
                 "kind": "payment",
             })
         recent_activities = sorted(
@@ -681,9 +682,7 @@ def create_app(test_config=None):
             ],
         )
 
-    @app.template_filter("currency")
-    def format_currency(value):
-        return f"${value:,.2f}"
+    app.add_template_filter(format_inr, "inr")
 
     @app.context_processor
     def inject_staff_user():
@@ -1505,7 +1504,10 @@ def create_app(test_config=None):
                 and amount.is_finite()
                 and amount > balance_before
             ):
-                errors["amount"] = f"Amount cannot exceed the remaining balance of ${_invoice_balance(invoice):,.2f}."
+                errors["amount"] = (
+                    "Amount cannot exceed the remaining balance of "
+                    f"{format_inr(_invoice_balance(invoice))}."
+                )
 
             if not errors:
                 payment = Payment(

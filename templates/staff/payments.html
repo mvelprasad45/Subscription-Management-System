@@ -36,7 +36,7 @@
         <td><a class="record-name" href="{{ url_for('staff_invoice_detail', invoice_id=payment.invoice.id) }}">{{ payment.invoice.invoice_number }}</a></td>
         <td>{{ payment.invoice.customer.name }}</td>
         <td>{{ payment.method|replace("_", " ")|title }}</td>
-        <td>{{ payment.amount|currency }}</td>
+        <td>{{ payment.amount|inr }}</td>
         <td>{{ payment.payment_date.strftime("%b %d, %Y") }}</td>
         <td>{{ payment.notes or "—" }}</td>
       </tr>

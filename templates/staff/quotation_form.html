@@ -37,7 +37,7 @@
         <select name="plan_id" id="quotation-plan" required>
           <option value="">Select a plan</option>
           {% for plan in plans %}
-          <option value="{{ plan.id }}" data-product-id="{{ plan.product_id }}" data-price="{{ plan.price }}"{% if form_data.get("plan_id", "")|string == plan.id|string %} selected{% endif %}>{{ plan.name }} · {{ plan.price|currency }} / {{ plan.billing_cycle|replace("_", " ") }}</option>
+          <option value="{{ plan.id }}" data-product-id="{{ plan.product_id }}" data-price="{{ plan.price }}"{% if form_data.get("plan_id", "")|string == plan.id|string %} selected{% endif %}>{{ plan.name }} · {{ plan.price|inr }} / {{ plan.billing_cycle|replace("_", " ") }}</option>
           {% endfor %}
         </select>
       </label>
@@ -53,10 +53,10 @@
     <div class="quote-summary" aria-live="polite">
       <div class="quote-summary-heading"><div><h2>Quotation summary</h2><p>Tax and discount use configured database rules only.</p></div><span class="configured-note">No rules configured · 0%</span></div>
       <dl class="quote-total-lines">
-        <div><dt>Subtotal</dt><dd id="quote-subtotal">$0.00</dd></div>
-        <div><dt>Tax</dt><dd id="quote-tax">$0.00</dd></div>
-        <div><dt>Discount</dt><dd id="quote-discount">−$0.00</dd></div>
-        <div class="quote-grand-total"><dt>Total</dt><dd id="quote-total">$0.00</dd></div>
+        <div><dt>Subtotal</dt><dd id="quote-subtotal">₹0.00</dd></div>
+        <div><dt>Tax</dt><dd id="quote-tax">₹0.00</dd></div>
+        <div><dt>Discount</dt><dd id="quote-discount">−₹0.00</dd></div>
+        <div class="quote-grand-total"><dt>Total</dt><dd id="quote-total">₹0.00</dd></div>
       </dl>
     </div>
     <div class="form-actions">

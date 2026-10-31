@@ -3,9 +3,10 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from reportlab.pdfbase import pdfmetrics
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from app import create_app
+from app import create_app, format_inr
 from models import Customer, Invoice, Payment, Plan, Product, Quotation, Subscription, User, db
 
 
@@ -120,6 +121,12 @@ def login(client, email, password):
 
 def route_path(rule):
     return re.sub(r"<(?:[^:>]+:)?[^>]+>", "1", rule)
+
+
+def test_inr_formatter_uses_indian_grouping_and_two_decimals():
+    assert format_inr(1234567.5) == "₹12,34,567.50"
+    assert format_inr(1234.5) == "₹1,234.50"
+    assert format_inr(12345) == "₹12,345.00"
 
 
 def authenticate_as(client, user_id):
@@ -298,6 +305,18 @@ def test_duplicate_invoice_period_is_rejected(client, app, records):
         ).count() == 1
 
 
+def test_invoice_pdf_download_embeds_font_with_rupee_glyph(client, records):
+    authenticate_as(client, records["staff_id"])
+    response = client.get(f"/staff/invoices/{records['invoice_id']}/pdf")
+
+    assert response.status_code == 200
+    assert response.mimetype == "application/pdf"
+    assert response.data.startswith(b"%PDF-")
+    assert b"/FontFile2" in response.data
+    assert b"/ToUnicode" in response.data
+    assert 0x20B9 in pdfmetrics.getFont("BrightloopNotoSans").face.charWidths
+
+
 def test_payment_rejects_overpayment_and_paid_invoice(client, app, records):
     authenticate_as(client, records["staff_id"])
     token = csrf_token(client)
@@ -312,6 +331,7 @@ def test_payment_rejects_overpayment_and_paid_invoice(client, app, records):
     overpayment = client.post(url, data=payment_data)
     assert overpayment.status_code == 200
     assert b"cannot exceed the remaining balance" in overpayment.data
+    assert "₹100.00".encode("utf-8") in overpayment.data
     with app.app_context():
         assert Payment.query.filter_by(invoice_id=records["invoice_id"]).count() == 0
 

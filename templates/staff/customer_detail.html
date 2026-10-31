@@ -34,7 +34,7 @@
 <section class="panel detail-records">
   <div class="panel-heading"><div><h2>Quotations</h2><p>{{ customer.quotations|length }} quotation(s)</p></div></div>
   <div class="table-scroll"><table class="records-table"><thead><tr><th>Quotation</th><th>Product / Plan</th><th>Created</th><th>Valid until</th><th>Status</th><th>Total</th></tr></thead><tbody>
-    {% for item in customer.quotations %}{% set item_status = quotation_statuses[item.id] %}<tr><td><a class="record-name" href="{{ url_for('staff_quotation_detail', quotation_id=item.id) }}">{{ item.quotation_number }}</a></td><td>{{ item.plan.product.name }} / {{ item.plan.name }}</td><td>{{ item.created_at.strftime("%b %d, %Y") }}</td><td>{{ item.valid_until.strftime("%b %d, %Y") }}</td><td><span class="status-badge status-{{ item_status }}">{{ item_status|title }}</span></td><td>{{ item.amount|currency }}</td></tr>
+    {% for item in customer.quotations %}{% set item_status = quotation_statuses[item.id] %}<tr><td><a class="record-name" href="{{ url_for('staff_quotation_detail', quotation_id=item.id) }}">{{ item.quotation_number }}</a></td><td>{{ item.plan.product.name }} / {{ item.plan.name }}</td><td>{{ item.created_at.strftime("%b %d, %Y") }}</td><td>{{ item.valid_until.strftime("%b %d, %Y") }}</td><td><span class="status-badge status-{{ item_status }}">{{ item_status|title }}</span></td><td>{{ item.amount|inr }}</td></tr>
     {% else %}<tr><td class="table-empty" colspan="6">No quotations.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
@@ -42,7 +42,7 @@
 <section class="panel detail-records">
   <div class="panel-heading"><div><h2>Invoices</h2><p>{{ customer.invoices|length }} invoice(s)</p></div></div>
   <div class="table-scroll"><table class="records-table"><thead><tr><th>Invoice</th><th>Issue date</th><th>Due date</th><th>Status</th><th>Total</th></tr></thead><tbody>
-    {% for item in customer.invoices %}<tr><td>{{ item.invoice_number }}</td><td>{{ item.issue_date.strftime("%b %d, %Y") }}</td><td>{{ item.due_date.strftime("%b %d, %Y") }}</td><td><span class="status-badge status-{{ item.status }}">{{ item.status|title }}</span></td><td>{{ item.total|currency }}</td></tr>
+    {% for item in customer.invoices %}<tr><td>{{ item.invoice_number }}</td><td>{{ item.issue_date.strftime("%b %d, %Y") }}</td><td>{{ item.due_date.strftime("%b %d, %Y") }}</td><td><span class="status-badge status-{{ item.status }}">{{ item.status|title }}</span></td><td>{{ item.total|inr }}</td></tr>
     {% else %}<tr><td class="table-empty" colspan="5">No invoices.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
@@ -50,7 +50,7 @@
 <section class="panel detail-records">
   <div class="panel-heading"><div><h2>Payments</h2><p>{{ payments|length }} payment(s)</p></div></div>
   <div class="table-scroll"><table class="records-table"><thead><tr><th>Invoice</th><th>Date</th><th>Method</th><th>Reference</th><th>Status</th><th>Notes</th><th>Amount</th></tr></thead><tbody>
-    {% for item in payments %}<tr><td>{{ item.invoice.invoice_number }}</td><td>{{ item.payment_date.strftime("%b %d, %Y") }}</td><td>{{ item.method|replace("_", " ")|title }}</td><td>{{ item.transaction_reference or "—" }}</td><td><span class="status-badge status-{{ item.status }}">{{ item.status|title }}</span></td><td>{{ item.notes or "—" }}</td><td>{{ item.amount|currency }}</td></tr>
+    {% for item in payments %}<tr><td>{{ item.invoice.invoice_number }}</td><td>{{ item.payment_date.strftime("%b %d, %Y") }}</td><td>{{ item.method|replace("_", " ")|title }}</td><td>{{ item.transaction_reference or "—" }}</td><td><span class="status-badge status-{{ item.status }}">{{ item.status|title }}</span></td><td>{{ item.notes or "—" }}</td><td>{{ item.amount|inr }}</td></tr>
     {% else %}<tr><td class="table-empty" colspan="7">No payments.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>

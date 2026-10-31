@@ -16,6 +16,7 @@ flask run --port 5002
 
 Open `http://127.0.0.1:5002/staff/login` and sign in with the staff account.
 The SQLite database is created at `instance/staff_dashboard.db`.
+Staff Dashboard prices, invoices, and payments are displayed in Indian rupees (INR). Existing stored numeric amounts are preserved. Invoice PDFs embed the OFL-licensed Noto Sans font in `static/fonts/` so the rupee glyph renders correctly; see `static/fonts/OFL.txt` for its license.
 
 ## Staff customers and quotations
 

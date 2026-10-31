@@ -44,7 +44,7 @@
           <td>{{ quotation.created_at.strftime("%b %d, %Y") }}</td>
           <td>{{ quotation.valid_until.strftime("%b %d, %Y") }}</td>
           <td><span class="status-badge status-{{ quotation_status }}">{{ quotation_status|title }}</span></td>
-          <td>{{ quotation.amount|currency }}</td>
+          <td>{{ quotation.amount|inr }}</td>
         </tr>
         {% else %}<tr><td class="table-empty" colspan="7">No quotations match your search.</td></tr>{% endfor %}
       </tbody>
