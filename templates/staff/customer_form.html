@@ -32,7 +32,7 @@
       </label>
       <label class="form-field form-field-wide">
         <span>Billing address</span>
-        <textarea name="billing_address" rows="3">{{ form_data.get('billing_address', customer.billing_address if customer else '') }}</textarea>
+        <textarea name="billing_address" rows="3" maxlength="2000">{{ form_data.get('billing_address', customer.billing_address if customer else '') }}</textarea>
       </label>
     </div>
     <div class="form-actions">

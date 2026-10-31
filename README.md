@@ -11,10 +11,10 @@ $env:SECRET_KEY = (python -c "import secrets; print(secrets.token_hex(32))")
 $env:FLASK_APP = "app:create_app"
 flask create-staff
 flask seed-demo
-flask run
+flask run --port 5002
 ```
 
-Open `http://127.0.0.1:5000/staff/login` and sign in with the staff account.
+Open `http://127.0.0.1:5002/staff/login` and sign in with the staff account.
 The SQLite database is created at `instance/staff_dashboard.db`.
 
 ## Staff customers and quotations
@@ -24,3 +24,39 @@ Staff can search, filter, and manage customer records at `/staff/customers`, and
 ## Staff subscriptions and invoices
 
 Manage subscription lifecycle and renewals at `/staff/subscriptions`. Accepted quotations can be converted into subscriptions, and confirmed or active subscriptions can generate one invoice per billing period. Invoices can be confirmed, marked paid, printed, downloaded as PDF, and marked sent; sending records the date without sending email.
+
+## Staff dashboard setup, run, and tests
+
+From the project folder in PowerShell, create and activate the virtual environment (skip creation if `.venv` already exists), then install the project requirements:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Set a private session secret and configure the Flask application:
+
+```powershell
+$env:SECRET_KEY = (python -c "import secrets; print(secrets.token_hex(32))")
+$env:FLASK_APP = "app:create_app"
+```
+
+Create a staff login and load the repeatable demo data:
+
+```powershell
+flask create-staff
+flask seed-demo
+```
+
+Run the staff dashboard on port 5002 and open `http://127.0.0.1:5002/staff/login`:
+
+```powershell
+flask run --port 5002
+```
+
+Run the automated staff tests with:
+
+```powershell
+python -m pytest
+```

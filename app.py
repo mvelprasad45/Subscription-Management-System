@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import click
-from flask import Flask, abort, flash, make_response, redirect, render_template, render_template_string, request, session, url_for
+from flask import Flask, abort, flash, make_response, redirect, render_template, request, session, url_for
 from functools import wraps
 from sqlalchemy import and_, case, func, inspect, or_, text
 from sqlalchemy.exc import IntegrityError
@@ -235,6 +235,8 @@ def _customer_from_form(existing_customer=None):
         errors["phone"] = "Phone must be 40 characters or fewer."
     if len(company_name) > 160:
         errors["company_name"] = "Company must be 160 characters or fewer."
+    if len(billing_address) > 2000:
+        errors["billing_address"] = "Billing address must be 2000 characters or fewer."
 
     return (
         Customer(
@@ -373,6 +375,15 @@ def create_app(test_config=None):
     @app.before_request
     def protect_staff_forms():
         if request.method == "POST" and request.path.startswith("/staff/"):
+            if request.endpoint != "staff_login":
+                user_id = session.get("user_id")
+                user = db.session.get(User, user_id) if user_id is not None else None
+                if user is None:
+                    session.clear()
+                    return redirect(url_for("staff_login"))
+                if user.role != "staff":
+                    abort(403)
+
             expected = session.get("_csrf_token")
             submitted = request.form.get("csrf_token", "")
             if not expected or not hmac.compare_digest(expected, submitted):
@@ -537,9 +548,7 @@ def create_app(test_config=None):
 
             if user is None or not check_password_hash(user.password_hash, password):
                 return (
-                    render_template_string(
-                        LOGIN_TEMPLATE, error="Invalid email or password."
-                    ),
+                    render_template("staff/login.html", error="Invalid email or password."),
                     401,
                 )
             if user.role != "staff":
@@ -550,7 +559,7 @@ def create_app(test_config=None):
             session["user_id"] = user.id
             return redirect(url_for("staff_dashboard"))
 
-        return render_template_string(LOGIN_TEMPLATE, error=None)
+        return render_template("staff/login.html", error=None)
 
     @app.route("/staff/logout", methods=["POST"])
     @role_required("staff")
@@ -1617,16 +1626,3 @@ def create_app(test_config=None):
         )
 
     return app
-
-
-LOGIN_TEMPLATE = """<!doctype html>
-<title>Staff login</title>
-<h1>Staff login</h1>
-{% if error %}<p role="alert">{{ error }}</p>{% endif %}
-<form method="post">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label>Email <input type="email" name="email" required></label>
-  <label>Password <input type="password" name="password" required></label>
-  <button type="submit">Log in</button>
-</form>
-"""
