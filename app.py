@@ -124,7 +124,6 @@ def _pdf_escape(value):
 
 def _invoice_pdf(invoice):
     lines = [
-        "BRIGHTLOOP SOFTWARE",
         "INVOICE",
         f"Invoice: {invoice.invoice_number}",
         f"Customer: {invoice.customer.name}",
@@ -137,7 +136,18 @@ def _invoice_pdf(invoice):
         f"Tax: ${invoice.tax:,.2f}",
         f"Total: ${invoice.total:,.2f}",
     ]
-    stream = "BT\n/F1 12 Tf\n50 790 Td\n"
+    stream = (
+        "q\n"
+        "0.102 0.082 0.188 rg\n"
+        "65 805 m 73.284 805 80 798.284 80 790 c "
+        "80 781.716 73.284 775 65 775 c "
+        "56.716 775 50 781.716 50 790 c "
+        "50 798.284 56.716 805 65 805 c h f\n"
+        "Q\n"
+        "BT\n/F2 18 Tf\n1 1 1 rg\n59 784 Td\n(C) Tj\nET\n"
+        "BT\n/F1 16 Tf\n0.102 0.082 0.188 rg\n92 785 Td\n(Brightloop) Tj\nET\n"
+        "BT\n/F1 12 Tf\n0 0 0 rg\n50 752 Td\n"
+    )
     for index, line in enumerate(lines):
         if index:
             stream += "0 -28 Td\n"
@@ -146,8 +156,9 @@ def _invoice_pdf(invoice):
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R /F2 6 0 R >> >> /Contents 5 0 R >>",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
         f"<< /Length {len(stream.encode('ascii'))} >>\nstream\n{stream}\nendstream".encode("ascii"),
     ]
     pdf = bytearray(b"%PDF-1.4\n")

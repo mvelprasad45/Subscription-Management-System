@@ -13,7 +13,14 @@
 </section>
 <section class="panel invoice-document">
   <div class="invoice-document-head">
-    <div><p class="eyebrow">BRIGHTLOOP SOFTWARE</p><h1>Invoice</h1><p>Subscription services</p></div>
+    <div>
+      <div class="invoice-brand" aria-label="Brightloop">
+        <span class="invoice-brand-mark" aria-hidden="true">C</span>
+        <span>Brightloop</span>
+      </div>
+      <h1>Invoice</h1>
+      <p>Subscription services</p>
+    </div>
     <div class="invoice-number-block"><strong>{{ invoice.invoice_number }}</strong><span>{{ payment_status }}</span></div>
   </div>
   <div class="invoice-parties">
