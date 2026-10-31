@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 from reportlab.pdfbase import pdfmetrics
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import generate_password_hash
 
 from app import create_app, format_inr
 from models import Customer, Invoice, Payment, Plan, Product, Quotation, Subscription, User, db
@@ -17,6 +17,8 @@ def app(tmp_path):
         {
             "TESTING": True,
             "SECRET_KEY": "test-only-secret-key",
+            "STAFF_DEV_MODE": False,
+            "LOGIN_URL": "/login",
             "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
         }
     )
@@ -106,17 +108,9 @@ def records(app):
 
 
 def csrf_token(client):
-    client.get("/staff/login")
+    client.get("/staff/dashboard")
     with client.session_transaction() as session:
         return session["_csrf_token"]
-
-
-def login(client, email, password):
-    token = csrf_token(client)
-    return client.post(
-        "/staff/login",
-        data={"csrf_token": token, "email": email, "password": password},
-    )
 
 
 def route_path(rule):
@@ -150,30 +144,11 @@ def test_secret_key_uses_environment_variable(tmp_path, monkeypatch):
         db.drop_all()
 
 
-def test_login_success_failure_and_password_hashing(client, app, records):
-    login_page = client.get("/staff/login")
-    assert login_page.status_code == 200
-    assert b"Welcome back" in login_page.data
-    assert b"Every plan, invoice and payment in one place." in login_page.data
-
-    failed = login(client, "staff@example.test", "wrong-password")
-    assert failed.status_code == 401
-    assert b"Invalid email or password" in failed.data
-
-    succeeded = login(client, "staff@example.test", "staff-password")
-    assert succeeded.status_code == 302
-    assert succeeded.headers["Location"].endswith("/staff/dashboard")
-    with app.app_context():
-        user = db.session.get(User, records["staff_id"])
-        assert check_password_hash(user.password_hash, "staff-password")
-        assert user.password_hash != "staff-password"
-
-
 def test_every_staff_route_blocks_anonymous_and_nonstaff_users(app, records):
     rules = [
         rule
         for rule in app.url_map.iter_rules()
-        if rule.rule.startswith("/staff/") and rule.endpoint != "staff_login"
+        if rule.rule.startswith("/staff/")
     ]
     assert rules
     for rule in rules:
@@ -188,13 +163,60 @@ def test_every_staff_route_blocks_anonymous_and_nonstaff_users(app, records):
     for rule in rules:
         path = route_path(rule.rule)
         if "GET" in rule.methods:
-            assert anonymous.get(path).status_code == 302, path
+            anonymous_response = anonymous.get(path)
+            assert anonymous_response.status_code == 302, path
+            assert anonymous_response.headers["Location"] == "/login", path
             assert admin.get(path).status_code == 403, path
             assert customer.get(path).status_code == 403, path
         if "POST" in rule.methods:
             assert anonymous.post(path).status_code == 302, path
             assert admin.post(path).status_code == 403, path
             assert customer.post(path).status_code == 403, path
+    staff = app.test_client()
+    authenticate_as(staff, records["staff_id"])
+    assert staff.get("/staff/dashboard").status_code == 200
+
+
+def test_staff_dev_mode_opens_dashboard_without_session(tmp_path):
+    database_path = tmp_path / "staff-dev-test.db"
+    app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-only-secret-key",
+            "STAFF_DEV_MODE": True,
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
+        }
+    )
+    with app.app_context():
+        db.session.add(
+            User(
+                name="Development Staff",
+                email="development-staff@example.test",
+                password_hash=generate_password_hash("unused-password"),
+                role="staff",
+            )
+        )
+        db.session.commit()
+
+    response = app.test_client().get("/staff/dashboard")
+    assert response.status_code == 200
+    assert b"Development mode" in response.data
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+
+
+def test_staff_logout_clears_session_and_uses_login_url(client, records):
+    authenticate_as(client, records["staff_id"])
+    response = client.post(
+        "/staff/logout",
+        data={"csrf_token": csrf_token(client)},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/login"
+    with client.session_transaction() as session:
+        assert "user_id" not in session
 
 
 def test_every_staff_post_requires_csrf(client, app, records):

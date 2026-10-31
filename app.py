@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO
 
 import click
-from flask import Flask, abort, flash, make_response, redirect, render_template, request, session, url_for
+from flask import Flask, abort, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from functools import wraps
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
@@ -18,20 +18,25 @@ from reportlab.pdfgen import canvas
 from sqlalchemy import and_, case, func, inspect, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import generate_password_hash
 
 from models import Customer, Invoice, Payment, Plan, Product, Quotation, Subscription, User, db
+
+
+def get_current_user():
+    if current_app.config["STAFF_DEV_MODE"]:
+        return User.query.filter_by(role="staff").order_by(User.id.asc()).first()
+    user_id = session.get("user_id")
+    return db.session.get(User, user_id) if user_id is not None else None
 
 
 def role_required(*allowed_roles):
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            user_id = session.get("user_id")
-            user = db.session.get(User, user_id) if user_id is not None else None
+            user = get_current_user()
             if user is None:
-                session.clear()
-                return redirect(url_for("staff_login"))
+                return redirect(current_app.config["LOGIN_URL"])
             if user.role not in allowed_roles:
                 abort(403)
             return view(*args, **kwargs)
@@ -266,6 +271,9 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
+        STAFF_DEV_MODE=os.environ.get("STAFF_DEV_MODE", "").strip().lower()
+        in {"1", "true", "yes", "on"},
+        LOGIN_URL=os.environ.get("LOGIN_URL", "/login"),
         SQLALCHEMY_DATABASE_URI="sqlite:///staff_dashboard.db",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_HTTPONLY=True,
@@ -387,14 +395,11 @@ def create_app(test_config=None):
     @app.before_request
     def protect_staff_forms():
         if request.method == "POST" and request.path.startswith("/staff/"):
-            if request.endpoint != "staff_login":
-                user_id = session.get("user_id")
-                user = db.session.get(User, user_id) if user_id is not None else None
-                if user is None:
-                    session.clear()
-                    return redirect(url_for("staff_login"))
-                if user.role != "staff":
-                    abort(403)
+            user = get_current_user()
+            if user is None:
+                return redirect(current_app.config["LOGIN_URL"])
+            if user.role != "staff":
+                abort(403)
 
             expected = session.get("_csrf_token")
             submitted = request.form.get("csrf_token", "")
@@ -551,33 +556,11 @@ def create_app(test_config=None):
 
         click.echo("Demo customers, products, plans, quotations, subscriptions, invoices, and payments are ready.")
 
-    @app.route("/staff/login", methods=["GET", "POST"])
-    def staff_login():
-        if request.method == "POST":
-            email = request.form.get("email", "").strip().lower()
-            password = request.form.get("password", "")
-            user = User.query.filter_by(email=email).first()
-
-            if user is None or not check_password_hash(user.password_hash, password):
-                return (
-                    render_template("staff/login.html", error="Invalid email or password."),
-                    401,
-                )
-            if user.role != "staff":
-                session.clear()
-                abort(403)
-
-            session.clear()
-            session["user_id"] = user.id
-            return redirect(url_for("staff_dashboard"))
-
-        return render_template("staff/login.html", error=None)
-
     @app.route("/staff/logout", methods=["POST"])
     @role_required("staff")
     def staff_logout():
         session.clear()
-        return redirect(url_for("staff_login"))
+        return redirect(current_app.config["LOGIN_URL"])
 
     @app.route("/staff/dashboard")
     @role_required("staff")
@@ -686,11 +669,11 @@ def create_app(test_config=None):
 
     @app.context_processor
     def inject_staff_user():
-        user_id = session.get("user_id")
         token = session.setdefault("_csrf_token", secrets.token_urlsafe(32))
         return {
-            "staff_user": db.session.get(User, user_id) if user_id else None,
+            "staff_user": get_current_user(),
             "csrf_token": token,
+            "staff_dev_mode": current_app.config["STAFF_DEV_MODE"],
         }
 
     @app.route("/staff/customers")
@@ -935,7 +918,7 @@ def create_app(test_config=None):
                     quotation_number=f"QT-{date.today():%Y%m%d}-{secrets.token_hex(3).upper()}",
                     customer_id=customer.id,
                     plan_id=plan.id,
-                    created_by_id=session["user_id"],
+                    created_by_id=get_current_user().id,
                     status="draft",
                     quantity=quantity,
                     subtotal=subtotal,

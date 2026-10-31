@@ -14,7 +14,7 @@ flask seed-demo
 flask run --port 5002
 ```
 
-Open `http://127.0.0.1:5002/staff/login` and sign in with the staff account.
+The project-wide login is at `http://127.0.0.1:5002/login`. After signing in, staff users can open the staff dashboard.
 The SQLite database is created at `instance/staff_dashboard.db`.
 Staff Dashboard prices, invoices, and payments are displayed in Indian rupees (INR). Existing stored numeric amounts are preserved. Invoice PDFs embed the OFL-licensed Noto Sans font in `static/fonts/` so the rupee glyph renders correctly; see `static/fonts/OFL.txt` for its license.
 
@@ -50,7 +50,7 @@ flask create-staff
 flask seed-demo
 ```
 
-Run the staff dashboard on port 5002 and open `http://127.0.0.1:5002/staff/login`:
+Run the staff dashboard on port 5002 and open `http://127.0.0.1:5002/login`:
 
 ```powershell
 flask run --port 5002
@@ -61,3 +61,5 @@ Run the automated staff tests with:
 ```powershell
 python -m pytest
 ```
+
+For local staff-module development only, set `$env:STAFF_DEV_MODE = "1"` before starting Flask to open staff pages without a login session. This uses the first staff account in the database. Keep `STAFF_DEV_MODE` OFF in production and when this module is merged into the project; the staff module then redirects unauthenticated users to `LOGIN_URL` (default `/login`).

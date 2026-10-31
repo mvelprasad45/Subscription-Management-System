@@ -77,6 +77,7 @@
           <kbd>⌘ K</kbd>
         </form>
         <div class="topbar-actions">
+          {% if staff_dev_mode %}<span class="development-mode-banner">Development mode</span>{% endif %}
           <div class="notification-wrap">
             <button class="icon-button notification-button" type="button" aria-label="Notifications" aria-expanded="false" aria-controls="notification-menu" data-notification-toggle>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
