@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brightloop – Sign in</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <aside class="brand">
+    <div class="logo"><i></i> Brightloop</div>
+    <div>
+      <h1>Every plan, invoice and payment in one place.</h1>
+      <p>Manage your subscriptions, download invoices and track payments without sending an email.</p>
+      <div class="months" aria-hidden="true">
+        <span class="paid">Jan</span><span class="paid">Feb</span><span class="paid">Mar</span>
+        <span class="paid">Apr</span><span class="due">May</span><span>Jun</span>
+      </div>
+      <div class="legend">Light: paid &nbsp; Purple: due this month</div>
+    </div>
+    <small>© Brightloop Software</small>
+  </aside>
+
+  <main class="panel">
+    <div class="box">
+
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tabIn" aria-selected="true">Sign in</button>
+        <button role="tab" id="tabUp" aria-selected="false">Create account</button>
+      </div>
+
+      <!-- SIGN IN -->
+      <form id="signin" novalidate>
+        <h2>Welcome back</h2>
+        <p class="sub">Sign in to manage your subscriptions and invoices.</p>
+        <label for="siEmail">Email</label>
+        <input id="siEmail" type="email" autocomplete="email" placeholder="you@company.com" required>
+        <label for="siPass">Password</label>
+        <div class="field">
+          <input id="siPass" type="password" autocomplete="current-password" required>
+          <button type="button" class="eye" data-toggle="siPass">Show</button>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="remember"> Remember me</label>
+          <a href="#" id="toForgot">Forgot password?</a>
+        </div>
+        <div class="msg" id="siMsg" role="alert"></div>
+        <button class="go" type="submit">Sign in</button>
+        <p class="note">Admin, staff and customers use the same sign in. You will see only what your role allows.</p>
+      </form>
+
+      <!-- SIGN UP (customers only; staff are added by the admin) -->
+      <form id="signup" novalidate hidden>
+        <h2>Create your account</h2>
+        <p class="sub">Use your email and a strong password. Each email can have only one account.</p>
+        <label for="suName">Full name</label>
+        <input id="suName" type="text" autocomplete="name" required>
+        <label for="suEmail">Email</label>
+        <input id="suEmail" type="email" autocomplete="email" placeholder="you@company.com" required>
+        <label for="suPass">Password</label>
+        <div class="field">
+          <input id="suPass" type="password" autocomplete="new-password" required>
+          <button type="button" class="eye" data-toggle="suPass">Show</button>
+        </div>
+        <ul class="rules" id="rules">
+          <li data-r="len">More than 8 characters</li>
+          <li data-r="up">One uppercase letter</li>
+          <li data-r="low">One lowercase letter</li>
+          <li data-r="sp">One special character</li>
+        </ul>
+        <label for="suConf">Confirm password</label>
+        <input id="suConf" type="password" autocomplete="new-password" required>
+        <div class="msg" id="suMsg" role="alert"></div>
+        <button class="go" type="submit">Create account</button>
+      </form>
+
+      <!-- FORGOT PASSWORD -->
+      <form id="forgot" novalidate hidden>
+        <h2>Reset your password</h2>
+        <p class="sub">Enter your registered email. We will send a reset link to it.</p>
+        <label for="fpEmail">Email</label>
+        <input id="fpEmail" type="email" autocomplete="email" placeholder="you@company.com" required>
+        <div class="msg" id="fpMsg" role="alert"></div>
+        <button class="go" type="submit">Send reset link</button>
+        <p class="note"><a href="#" id="backIn">Back to sign in</a></p>
+      </form>
+
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
