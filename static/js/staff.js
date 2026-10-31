@@ -46,6 +46,60 @@
     }
   });
 
+  const quotationForm = document.getElementById("quotation-form");
+  if (quotationForm) {
+    const productSelect = document.getElementById("quotation-product");
+    const planSelect = document.getElementById("quotation-plan");
+    const quantityInput = document.getElementById("quotation-quantity");
+    const planDataElement = document.getElementById("quotation-plan-data");
+    let planData = {};
+    try {
+      planData = JSON.parse(planDataElement.textContent);
+    } catch (error) {
+      console.error("Could not read quotation plan data.", error);
+    }
+
+    const updatePlans = (selectedPlanId = planSelect.value) => {
+      const productId = productSelect.value;
+      Array.from(planSelect.options).forEach((option) => {
+        if (!option.value) return;
+        const matches = !productId || option.dataset.productId === productId;
+        option.hidden = !matches;
+        option.disabled = !matches;
+      });
+      if (selectedPlanId && planSelect.querySelector(`option[value="${selectedPlanId}"]`)?.disabled) {
+        planSelect.value = "";
+      }
+      updateQuotationTotal();
+    };
+
+    const updateQuotationTotal = () => {
+      const selectedPlan = planData[planSelect.value];
+      const quantity = Math.max(Number.parseInt(quantityInput.value, 10) || 0, 0);
+      const subtotal = selectedPlan ? Number(selectedPlan.price) * quantity : 0;
+      const discount = subtotal * (Number(quotationForm.dataset.discountRate) || 0) / 100;
+      const tax = (subtotal - discount) * (Number(quotationForm.dataset.taxRate) || 0) / 100;
+      const money = (value) => `$${value.toFixed(2)}`;
+      document.getElementById("quote-subtotal").textContent = money(subtotal);
+      document.getElementById("quote-tax").textContent = money(tax);
+      document.getElementById("quote-discount").textContent = `−${money(discount)}`;
+      document.getElementById("quote-total").textContent = money(subtotal + tax - discount);
+    };
+
+    const selectedPlan = planData[planSelect.value];
+    if (selectedPlan && !productSelect.value) {
+      productSelect.value = String(selectedPlan.product_id);
+    }
+    productSelect.addEventListener("change", () => updatePlans(""));
+    planSelect.addEventListener("change", () => {
+      const plan = planData[planSelect.value];
+      if (plan) productSelect.value = String(plan.product_id);
+      updatePlans(planSelect.value);
+    });
+    quantityInput.addEventListener("input", updateQuotationTotal);
+    updatePlans(planSelect.value);
+  }
+
   const chart = document.getElementById("revenue-chart");
   const revenueData = document.getElementById("revenue-data");
   if (!chart || !revenueData) return;

@@ -1,0 +1,44 @@
+{% extends "staff/base.html" %}
+
+{% block title %}{{ "Edit customer" if customer else "Add customer" }}{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow"><a href="{{ url_for('staff_customers') }}">CUSTOMERS</a> / {{ "EDIT" if customer else "NEW" }}</p>
+    <h1>{{ "Edit customer" if customer else "Add customer" }}</h1>
+    <p class="page-subtitle">Enter the customer’s contact and billing details.</p>
+  </div>
+</section>
+<section class="panel form-panel">
+  <form method="post" class="staff-form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="form-grid">
+      <label class="form-field">
+        <span>Name <b>*</b></span>
+        <input name="name" maxlength="120" required value="{{ form_data.get('name', customer.name if customer else '') }}" autocomplete="name">
+      </label>
+      <label class="form-field">
+        <span>Email <b>*</b></span>
+        <input type="email" name="email" maxlength="255" required value="{{ form_data.get('email', customer.email if customer else '') }}" autocomplete="email">
+      </label>
+      <label class="form-field">
+        <span>Phone</span>
+        <input name="phone" maxlength="40" value="{{ form_data.get('phone', customer.phone if customer else '') }}" autocomplete="tel">
+      </label>
+      <label class="form-field">
+        <span>Company</span>
+        <input name="company_name" maxlength="160" value="{{ form_data.get('company_name', customer.company_name if customer else '') }}" autocomplete="organization">
+      </label>
+      <label class="form-field form-field-wide">
+        <span>Billing address</span>
+        <textarea name="billing_address" rows="3">{{ form_data.get('billing_address', customer.billing_address if customer else '') }}</textarea>
+      </label>
+    </div>
+    <div class="form-actions">
+      <a class="button button-secondary" href="{{ url_for('staff_customer_detail', customer_id=customer.id) if customer else url_for('staff_customers') }}">Cancel</a>
+      <button class="button button-primary" type="submit">{{ "Save changes" if customer else "Create customer" }}</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

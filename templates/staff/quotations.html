@@ -1,0 +1,62 @@
+{% extends "staff/base.html" %}
+
+{% block title %}Quotations{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">SALES MANAGEMENT</p>
+    <h1>Quotations</h1>
+    <p class="page-subtitle">Prepare and track customer quotations.</p>
+  </div>
+  <a class="button button-primary" href="{{ url_for('staff_quotation_create') }}"><span aria-hidden="true">+</span> New quotation</a>
+</section>
+
+<section class="panel records-panel">
+  <form class="records-toolbar" method="get" action="{{ url_for('staff_quotations') }}">
+    <label class="filter-search">
+      <span class="sr-only">Search quotations</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.2 4.2"/></svg>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search quotation or customer">
+    </label>
+    <label class="filter-select">
+      <span class="sr-only">Filter by quotation status</span>
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for value in ["draft", "sent", "accepted", "rejected", "expired"] %}
+        <option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ value|title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="button button-secondary" type="submit">Apply filters</button>
+    {% if search or status %}<a class="clear-filters" href="{{ url_for('staff_quotations') }}">Clear</a>{% endif %}
+  </form>
+  <div class="table-scroll">
+    <table class="records-table">
+      <thead><tr><th>Quotation</th><th>Customer</th><th>Product / Plan</th><th>Created</th><th>Valid until</th><th>Status</th><th>Total</th></tr></thead>
+      <tbody>
+        {% for quotation in quotations %}
+        {% set quotation_status = quotation_statuses[quotation.id] %}
+        <tr>
+          <td><a class="record-name" href="{{ url_for('staff_quotation_detail', quotation_id=quotation.id) }}">{{ quotation.quotation_number }}</a></td>
+          <td>{{ quotation.customer.name }}</td>
+          <td>{{ quotation.plan.product.name }} / {{ quotation.plan.name }}</td>
+          <td>{{ quotation.created_at.strftime("%b %d, %Y") }}</td>
+          <td>{{ quotation.valid_until.strftime("%b %d, %Y") }}</td>
+          <td><span class="status-badge status-{{ quotation_status }}">{{ quotation_status|title }}</span></td>
+          <td>{{ quotation.amount|currency }}</td>
+        </tr>
+        {% else %}<tr><td class="table-empty" colspan="7">No quotations match your search.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="records-footer">
+    <span>Showing {{ quotations|length }} of {{ total }} quotations</span>
+    <nav class="pagination" aria-label="Quotation pages">
+      {% if page > 1 %}<a href="{{ url_for('staff_quotations', q=search, status=status, page=page-1) }}" aria-label="Previous page">‹</a>{% else %}<span class="disabled">‹</span>{% endif %}
+      <span class="page-indicator">Page {{ page }} of {{ pages }}</span>
+      {% if page < pages %}<a href="{{ url_for('staff_quotations', q=search, status=status, page=page+1) }}" aria-label="Next page">›</a>{% else %}<span class="disabled">›</span>{% endif %}
+    </nav>
+  </div>
+</section>
+{% endblock %}

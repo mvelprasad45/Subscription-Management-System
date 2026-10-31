@@ -1,0 +1,69 @@
+{% extends "staff/base.html" %}
+
+{% block title %}New quotation{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow"><a href="{{ url_for('staff_quotations') }}">QUOTATIONS</a> / NEW</p>
+    <h1>New quotation</h1>
+    <p class="page-subtitle">Choose a customer and plan, then review the calculated total.</p>
+  </div>
+</section>
+<section class="panel form-panel">
+  <form method="post" class="staff-form" id="quotation-form" data-tax-rate="{{ tax_rate }}" data-discount-rate="{{ discount_rate }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="form-grid">
+      <label class="form-field form-field-wide">
+        <span>Customer <b>*</b></span>
+        <select name="customer_id" required>
+          <option value="">Select a customer</option>
+          {% for customer in customers %}
+          <option value="{{ customer.id }}"{% if form_data.get("customer_id", "")|string == customer.id|string %} selected{% endif %}>{{ customer.name }} · {{ customer.email }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="form-field">
+        <span>Product <b>*</b></span>
+        <select name="product_id" id="quotation-product" required>
+          <option value="">Select a product</option>
+          {% for product in products %}
+          <option value="{{ product.id }}"{% if form_data.get("product_id", "")|string == product.id|string %} selected{% endif %}>{{ product.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="form-field">
+        <span>Plan <b>*</b></span>
+        <select name="plan_id" id="quotation-plan" required>
+          <option value="">Select a plan</option>
+          {% for plan in plans %}
+          <option value="{{ plan.id }}" data-product-id="{{ plan.product_id }}" data-price="{{ plan.price }}"{% if form_data.get("plan_id", "")|string == plan.id|string %} selected{% endif %}>{{ plan.name }} · {{ plan.price|currency }} / {{ plan.billing_cycle|replace("_", " ") }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="form-field">
+        <span>Quantity <b>*</b></span>
+        <input type="number" name="quantity" id="quotation-quantity" min="1" max="1000" step="1" required value="{{ form_data.get('quantity', '1') }}">
+      </label>
+      <label class="form-field">
+        <span>Valid until <b>*</b></span>
+        <input type="date" name="valid_until" min="{{ today_iso }}" required value="{{ form_data.get('valid_until', default_valid_until) }}">
+      </label>
+    </div>
+    <div class="quote-summary" aria-live="polite">
+      <div class="quote-summary-heading"><div><h2>Quotation summary</h2><p>Tax and discount use configured database rules only.</p></div><span class="configured-note">No rules configured · 0%</span></div>
+      <dl class="quote-total-lines">
+        <div><dt>Subtotal</dt><dd id="quote-subtotal">$0.00</dd></div>
+        <div><dt>Tax</dt><dd id="quote-tax">$0.00</dd></div>
+        <div><dt>Discount</dt><dd id="quote-discount">−$0.00</dd></div>
+        <div class="quote-grand-total"><dt>Total</dt><dd id="quote-total">$0.00</dd></div>
+      </dl>
+    </div>
+    <div class="form-actions">
+      <a class="button button-secondary" href="{{ url_for('staff_quotations') }}">Cancel</a>
+      <button class="button button-primary" type="submit">Create quotation</button>
+    </div>
+  </form>
+</section>
+<script type="application/json" id="quotation-plan-data">{{ plans_by_product|tojson }}</script>
+{% endblock %}

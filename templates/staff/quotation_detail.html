@@ -1,0 +1,48 @@
+{% extends "staff/base.html" %}
+
+{% block title %}{{ quotation.quotation_number }}{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow"><a href="{{ url_for('staff_quotations') }}">QUOTATIONS</a> / {{ quotation.quotation_number }}</p>
+    <h1>{{ quotation.quotation_number }}</h1>
+    <p class="page-subtitle">Quotation details and status history.</p>
+  </div>
+  <span class="status-badge status-{{ status }} status-large">{{ status|title }}</span>
+</section>
+<div class="quote-detail-layout">
+  <section class="panel detail-panel">
+    <div class="panel-heading"><div><h2>Quotation information</h2><p>Created {{ quotation.created_at.strftime("%B %d, %Y") }}</p></div></div>
+    <dl class="detail-grid">
+      <div><dt>Customer</dt><dd><a href="{{ url_for('staff_customer_detail', customer_id=quotation.customer.id) }}">{{ quotation.customer.name }}</a></dd></div>
+      <div><dt>Customer email</dt><dd><a href="mailto:{{ quotation.customer.email }}">{{ quotation.customer.email }}</a></dd></div>
+      <div><dt>Product</dt><dd>{{ quotation.plan.product.name }}</dd></div>
+      <div><dt>Plan</dt><dd>{{ quotation.plan.name }} · {{ quotation.plan.billing_cycle|replace("_", " ")|title }}</dd></div>
+      <div><dt>Quantity</dt><dd>{{ quotation.quantity }}</dd></div>
+      <div><dt>Valid until</dt><dd>{{ quotation.valid_until.strftime("%B %d, %Y") }}</dd></div>
+    </dl>
+  </section>
+  <section class="panel detail-panel">
+    <div class="panel-heading"><div><h2>Price breakdown</h2><p>Tax and discount rules are not configured.</p></div></div>
+    <dl class="quote-total-lines detail-prices">
+      <div><dt>Subtotal</dt><dd>{{ quotation.subtotal|currency }}</dd></div>
+      <div><dt>Tax</dt><dd>{{ quotation.tax|currency }}</dd></div>
+      <div><dt>Discount</dt><dd>−{{ quotation.discount|currency }}</dd></div>
+      <div class="quote-grand-total"><dt>Total</dt><dd>{{ quotation.amount|currency }}</dd></div>
+    </dl>
+    {% if allowed_transitions %}
+    <div class="status-transition">
+      <p>Update status</p>
+      {% for next_status in allowed_transitions %}
+      <form method="post" action="{{ url_for('staff_quotation_update_status', quotation_id=quotation.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="status" value="{{ next_status }}">
+        <button class="button {{ 'button-primary' if next_status == 'sent' or next_status == 'accepted' else 'button-secondary' }}" type="submit">Mark {{ next_status|title }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
