@@ -1,0 +1,40 @@
+{% extends "staff/base.html" %}
+
+{% block title %}{{ invoice.invoice_number }}{% endblock %}
+
+{% block content %}
+<section class="page-heading no-print">
+  <div>
+    <p class="eyebrow"><a href="{{ url_for('staff_invoices') }}">INVOICES</a> / {{ invoice.invoice_number }}</p>
+    <h1>{{ invoice.invoice_number }}</h1>
+    <p class="page-subtitle">Invoice details and payment status.</p>
+  </div>
+  <span class="status-badge status-{{ invoice.status }} status-large">{{ payment_status }}</span>
+</section>
+<section class="panel invoice-document">
+  <div class="invoice-document-head">
+    <div><p class="eyebrow">BRIGHTLOOP SOFTWARE</p><h1>Invoice</h1><p>Subscription services</p></div>
+    <div class="invoice-number-block"><strong>{{ invoice.invoice_number }}</strong><span>{{ payment_status }}</span></div>
+  </div>
+  <div class="invoice-parties">
+    <div><span class="detail-label">BILL TO</span><strong>{{ invoice.customer.name }}</strong><span>{{ invoice.customer.company_name or "" }}</span><a href="mailto:{{ invoice.customer.email }}">{{ invoice.customer.email }}</a><span>{{ invoice.customer.billing_address or "" }}</span></div>
+    <div><span class="detail-label">INVOICE DETAILS</span><span>Invoice date: <strong>{{ invoice.issue_date.strftime("%B %d, %Y") }}</strong></span><span>Due date: <strong>{{ invoice.due_date.strftime("%B %d, %Y") }}</strong></span><span>Period: <strong>{{ invoice.billing_period_start.strftime("%b %d, %Y") if invoice.billing_period_start else "—" }} – {{ invoice.billing_period_end.strftime("%b %d, %Y") if invoice.billing_period_end else "—" }}</strong></span>{% if invoice.sent_at %}<span>Sent: <strong>{{ invoice.sent_at.strftime("%B %d, %Y %H:%M") }}</strong></span>{% endif %}</div>
+  </div>
+  <div class="table-scroll invoice-lines"><table class="records-table"><thead><tr><th>Description</th><th>Quantity</th><th>Unit amount</th><th>Amount</th></tr></thead><tbody>
+    <tr><td>{{ invoice.subscription.plan.name if invoice.subscription else "Subscription services" }}</td><td>{{ invoice.subscription.quantity if invoice.subscription else 1 }}</td><td>{{ invoice.subscription.plan.price|currency if invoice.subscription else invoice.subtotal|currency }}</td><td>{{ invoice.subtotal|currency }}</td></tr>
+  </tbody></table></div>
+  <dl class="quote-total-lines invoice-totals"><div><dt>Subtotal</dt><dd>{{ invoice.subtotal|currency }}</dd></div><div><dt>Tax</dt><dd>{{ invoice.tax|currency }}</dd></div><div class="quote-grand-total"><dt>Total due</dt><dd>{{ invoice.total|currency }}</dd></div></dl>
+  {% if invoice.paid_at %}<p class="paid-stamp">PAID · {{ invoice.paid_at.strftime("%B %d, %Y") }}</p>{% endif %}
+</section>
+<div class="invoice-actions no-print">
+  <a class="button button-secondary" href="{{ url_for('staff_invoices') }}">Back to invoices</a>
+  <button class="button button-secondary" type="button" onclick="window.print()">Print</button>
+  <a class="button button-secondary" href="{{ url_for('staff_invoice_pdf', invoice_id=invoice.id) }}">Download as PDF</a>
+  {% if invoice.status != "paid" %}
+  <form method="post" action="{{ url_for('staff_invoice_send', invoice_id=invoice.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-secondary" type="submit">Send invoice</button></form>
+  {% endif %}
+  {% for next_status in allowed_transitions %}
+  <form method="post" action="{{ url_for('staff_invoice_update_status', invoice_id=invoice.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="status" value="{{ next_status }}"><button class="button button-primary" type="submit">Mark {{ "Confirmed" if next_status == "confirmed" else next_status|title }}</button></form>
+  {% endfor %}
+</div>
+{% endblock %}

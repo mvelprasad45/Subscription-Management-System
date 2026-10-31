@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import CheckConstraint
+from sqlalchemy import CheckConstraint, UniqueConstraint
 
 
 db = SQLAlchemy()
@@ -127,6 +127,9 @@ class Subscription(db.Model):
     quotation_id = db.Column(
         db.Integer, db.ForeignKey("quotations.id"), unique=True
     )
+    lifecycle_status = db.Column("workflow_status", db.String(20), nullable=False, default="draft")
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     status = db.Column(db.String(20), nullable=False, default="active")
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date)
@@ -142,6 +145,12 @@ class Subscription(db.Model):
 class Invoice(db.Model):
     __tablename__ = "invoices"
     __table_args__ = (
+        UniqueConstraint(
+            "subscription_id",
+            "billing_period_start",
+            "billing_period_end",
+            name="uq_invoice_subscription_billing_period",
+        ),
         CheckConstraint(
             "status IN ('draft', 'open', 'paid', 'overdue', 'void')",
             name="check_invoice_status",
@@ -155,9 +164,12 @@ class Invoice(db.Model):
     invoice_number = db.Column(db.String(40), nullable=False, unique=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
     subscription_id = db.Column(db.Integer, db.ForeignKey("subscriptions.id"))
+    billing_period_start = db.Column(db.Date)
+    billing_period_end = db.Column(db.Date)
     issue_date = db.Column(db.Date, nullable=False, default=date.today)
     due_date = db.Column(db.Date, nullable=False)
     paid_at = db.Column(db.DateTime(timezone=True))
+    sent_at = db.Column(db.DateTime(timezone=True))
     subtotal = db.Column(db.Numeric(10, 2), nullable=False)
     tax = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     total = db.Column(db.Numeric(10, 2), nullable=False)

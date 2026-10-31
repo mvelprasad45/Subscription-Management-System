@@ -1,0 +1,56 @@
+{% extends "staff/base.html" %}
+
+{% block title %}{{ subscription.subscription_code }}{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow"><a href="{{ url_for('staff_subscriptions') }}">SUBSCRIPTIONS</a> / {{ subscription.subscription_code }}</p>
+    <h1>{{ subscription.subscription_code }}</h1>
+    <p class="page-subtitle">{{ subscription.customer.name }} · {{ subscription.plan.product.name }} / {{ subscription.plan.name }}</p>
+  </div>
+  <span class="status-badge status-{{ subscription.lifecycle_status }} status-large">{{ subscription.lifecycle_status|title }}</span>
+</section>
+<section class="panel detail-panel">
+  <div class="panel-heading"><div><h2>Subscription details</h2><p>Renewal and billing information</p></div>
+    {% if subscription.lifecycle_status in ["confirmed", "active"] %}<a class="button button-primary" href="{{ url_for('staff_invoice_create', subscription_id=subscription.id) }}">Generate invoice</a>{% endif %}
+  </div>
+  <dl class="detail-grid">
+    <div><dt>Customer</dt><dd><a href="{{ url_for('staff_customer_detail', customer_id=subscription.customer.id) }}">{{ subscription.customer.name }}</a></dd></div>
+    <div><dt>Product</dt><dd>{{ subscription.plan.product.name }}</dd></div>
+    <div><dt>Plan</dt><dd>{{ subscription.plan.name }}</dd></div>
+    <div><dt>Billing cycle</dt><dd>{{ subscription.plan.billing_cycle|replace("_", " ")|title }}</dd></div>
+    <div><dt>Quantity</dt><dd>{{ subscription.quantity }}</dd></div>
+    <div><dt>Recurring amount</dt><dd>{{ subscription.amount|currency }}</dd></div>
+    <div><dt>Start date</dt><dd>{{ subscription.start_date.strftime("%B %d, %Y") }}</dd></div>
+    <div><dt>Expiry date</dt><dd>{{ subscription.end_date.strftime("%B %d, %Y") if subscription.end_date else "No end date set" }}</dd></div>
+    <div><dt>Next renewal date</dt><dd>{{ subscription.next_billing_date.strftime("%B %d, %Y") if subscription.next_billing_date else "Not scheduled" }}</dd></div>
+    {% if subscription.quotation %}<div><dt>Source quotation</dt><dd><a href="{{ url_for('staff_quotation_detail', quotation_id=subscription.quotation.id) }}">{{ subscription.quotation.quotation_number }}</a></dd></div>{% endif %}
+  </dl>
+  {% if allowed_transitions %}
+  <div class="status-transition">
+    <p>Next permitted status</p>
+    {% for next_status in allowed_transitions %}
+    <form method="post" action="{{ url_for('staff_subscription_update_status', subscription_id=subscription.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="status" value="{{ next_status }}">
+      <button class="button button-primary" type="submit">Mark {{ next_status|title }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+<section class="panel detail-records">
+  <div class="panel-heading"><div><h2>Linked invoices</h2><p>{{ subscription.invoices|length }} invoice(s)</p></div></div>
+  <div class="table-scroll"><table class="records-table"><thead><tr><th>Invoice</th><th>Billing period</th><th>Invoice date</th><th>Due date</th><th>Status</th><th>Total</th></tr></thead><tbody>
+    {% for invoice in subscription.invoices %}
+    <tr>
+      <td><a class="record-name" href="{{ url_for('staff_invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a></td>
+      <td>{{ invoice.billing_period_start.strftime("%b %d, %Y") if invoice.billing_period_start else "—" }} – {{ invoice.billing_period_end.strftime("%b %d, %Y") if invoice.billing_period_end else "—" }}</td>
+      <td>{{ invoice.issue_date.strftime("%b %d, %Y") }}</td><td>{{ invoice.due_date.strftime("%b %d, %Y") }}</td>
+      <td><span class="status-badge status-{{ invoice.status }}">{{ invoice_status_labels[invoice.id] }}</span></td><td>{{ invoice.total|currency }}</td>
+    </tr>
+    {% else %}<tr><td class="table-empty" colspan="6">No invoices have been generated.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

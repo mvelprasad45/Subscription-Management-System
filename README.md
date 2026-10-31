@@ -20,3 +20,7 @@ The SQLite database is created at `instance/staff_dashboard.db`.
 ## Staff customers and quotations
 
 Staff can search, filter, and manage customer records at `/staff/customers`, and create and track quotations at `/staff/quotations`. Quotation totals use the selected plan price and quantity. The current database has no tax-rate or discount-rule values, so those amounts are calculated as zero until rules are configured elsewhere.
+
+## Staff subscriptions and invoices
+
+Manage subscription lifecycle and renewals at `/staff/subscriptions`. Accepted quotations can be converted into subscriptions, and confirmed or active subscriptions can generate one invoice per billing period. Invoices can be confirmed, marked paid, printed, downloaded as PDF, and marked sent; sending records the date without sending email.

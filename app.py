@@ -2,11 +2,12 @@ import os
 import secrets
 import hmac
 import re
+import calendar
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 import click
-from flask import Flask, abort, flash, redirect, render_template, render_template_string, request, session, url_for
+from flask import Flask, abort, flash, make_response, redirect, render_template, render_template_string, request, session, url_for
 from functools import wraps
 from sqlalchemy import and_, case, func, inspect, or_, text
 from sqlalchemy.exc import IntegrityError
@@ -34,21 +35,96 @@ def role_required(*allowed_roles):
     return decorator
 
 
-def _customer_status_expression():
-    return case(
-        (Customer.subscriptions.any(Subscription.status == "active"), "active"),
-        (Customer.subscriptions.any(Subscription.status == "trialing"), "trialing"),
-        (Customer.subscriptions.any(Subscription.status == "past_due"), "past_due"),
-        (Customer.subscriptions.any(Subscription.status == "canceled"), "canceled"),
-        (Customer.subscriptions.any(Subscription.status == "expired"), "expired"),
-        else_="none",
+def _customer_status(customer):
+    priorities = ("active", "confirmed", "quotation", "draft", "closed")
+    statuses = {subscription.lifecycle_status for subscription in customer.subscriptions}
+    return next((status for status in priorities if status in statuses), "none")
+
+
+CUSTOMER_STATUS_LABELS = {
+    "active": "Active",
+    "confirmed": "Confirmed",
+    "quotation": "Quotation",
+    "draft": "Draft",
+    "closed": "Closed",
+}
+
+
+def _subscription_expiring_cutoff(today=None):
+    return (today or date.today()) + timedelta(days=30)
+
+
+def _add_billing_cycle(start, billing_cycle):
+    if billing_cycle == "monthly":
+        month_index = start.month
+        year = start.year + (month_index // 12)
+        month = (month_index % 12) + 1
+        return date(year, month, min(start.day, calendar.monthrange(year, month)[1]))
+    if billing_cycle == "quarterly":
+        month_index = start.month + 2
+        year = start.year + (month_index // 12)
+        month = (month_index % 12) + 1
+        return date(year, month, min(start.day, calendar.monthrange(year, month)[1]))
+    if billing_cycle == "yearly":
+        year = start.year + 1
+        return date(year, start.month, min(start.day, calendar.monthrange(year, start.month)[1]))
+    return None
+
+
+def _invoice_status_label(status):
+    return {"open": "Confirmed", "overdue": "Confirmed", "void": "Draft"}.get(
+        status, status.title()
     )
 
 
-def _customer_status(customer):
-    priorities = ("active", "trialing", "past_due", "canceled", "expired")
-    statuses = {subscription.status for subscription in customer.subscriptions}
-    return next((status for status in priorities if status in statuses), "none")
+def _pdf_escape(value):
+    return str(value).encode("ascii", "replace").decode("ascii").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _invoice_pdf(invoice):
+    lines = [
+        "BRIGHTLOOP SOFTWARE",
+        "INVOICE",
+        f"Invoice: {invoice.invoice_number}",
+        f"Customer: {invoice.customer.name}",
+        f"Email: {invoice.customer.email}",
+        f"Invoice date: {invoice.issue_date:%B %d, %Y}",
+        f"Due date: {invoice.due_date:%B %d, %Y}",
+        f"Billing period: {invoice.billing_period_start or '-'} to {invoice.billing_period_end or '-'}",
+        f"Status: {_invoice_status_label(invoice.status)}",
+        f"Subtotal: ${invoice.subtotal:,.2f}",
+        f"Tax: ${invoice.tax:,.2f}",
+        f"Total: ${invoice.total:,.2f}",
+    ]
+    stream = "BT\n/F1 12 Tf\n50 790 Td\n"
+    for index, line in enumerate(lines):
+        if index:
+            stream += "0 -28 Td\n"
+        stream += f"({_pdf_escape(line)}) Tj\n"
+    stream += "ET"
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        f"<< /Length {len(stream.encode('ascii'))} >>\nstream\n{stream}\nendstream".encode("ascii"),
+    ]
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, body in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode("ascii"))
+        pdf.extend(body)
+        pdf.extend(b"\nendobj\n")
+    xref_offset = len(pdf)
+    pdf.extend(f"xref\n0 {len(offsets)}\n".encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    pdf.extend(
+        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF".encode("ascii")
+    )
+    return bytes(pdf)
 
 
 def _effective_quotation_status(quotation, today=None):
@@ -148,6 +224,80 @@ def create_app(test_config=None):
 
     with app.app_context():
         db.create_all()
+        subscription_columns = {
+            column["name"]
+            for column in inspect(db.engine).get_columns("subscriptions")
+        }
+        subscription_migrations = (
+            ("workflow_status", "VARCHAR(20)"),
+            ("quantity", "INTEGER NOT NULL DEFAULT 1"),
+            ("amount", "NUMERIC(10, 2) NOT NULL DEFAULT 0"),
+        )
+        for column_name, column_definition in subscription_migrations:
+            if column_name not in subscription_columns:
+                db.session.execute(
+                    text(
+                        f"ALTER TABLE subscriptions ADD COLUMN "
+                        f"{column_name} {column_definition}"
+                    )
+                )
+        if "workflow_status" not in subscription_columns:
+            db.session.execute(
+                text(
+                    "UPDATE subscriptions SET workflow_status = CASE status "
+                    "WHEN 'active' THEN 'active' "
+                    "WHEN 'past_due' THEN 'confirmed' "
+                    "WHEN 'canceled' THEN 'closed' "
+                    "WHEN 'expired' THEN 'closed' "
+                    "ELSE 'draft' END"
+                )
+            )
+        if "quantity" not in subscription_columns:
+            db.session.execute(
+                text(
+                    "UPDATE subscriptions SET quantity = COALESCE("
+                    "(SELECT quotations.quantity FROM quotations "
+                    "WHERE quotations.id = subscriptions.quotation_id), 1)"
+                )
+            )
+        if "amount" not in subscription_columns:
+            db.session.execute(
+                text(
+                    "UPDATE subscriptions SET amount = COALESCE("
+                    "(SELECT quotations.amount FROM quotations "
+                    "WHERE quotations.id = subscriptions.quotation_id), "
+                    "(SELECT plans.price FROM plans WHERE plans.id = subscriptions.plan_id), 0) "
+                    "WHERE amount = 0"
+                )
+            )
+
+        invoice_columns = {
+            column["name"] for column in inspect(db.engine).get_columns("invoices")
+        }
+        invoice_migrations = (
+            ("billing_period_start", "DATE"),
+            ("billing_period_end", "DATE"),
+            ("sent_at", "DATETIME"),
+        )
+        for column_name, column_definition in invoice_migrations:
+            if column_name not in invoice_columns:
+                db.session.execute(
+                    text(
+                        f"ALTER TABLE invoices ADD COLUMN "
+                        f"{column_name} {column_definition}"
+                    )
+                )
+        db.session.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_invoice_subscription_billing_period "
+                "ON invoices(subscription_id, billing_period_start, billing_period_end) "
+                "WHERE subscription_id IS NOT NULL "
+                "AND billing_period_start IS NOT NULL "
+                "AND billing_period_end IS NOT NULL"
+            )
+        )
+
         quotation_columns = {
             column["name"] for column in inspect(db.engine).get_columns("quotations")
         }
@@ -172,7 +322,7 @@ def create_app(test_config=None):
                     "WHERE subtotal = 0 AND amount <> 0"
                 )
             )
-            db.session.commit()
+        db.session.commit()
 
     @app.before_request
     def protect_staff_forms():
@@ -283,6 +433,9 @@ def create_app(test_config=None):
                     customer_id=customer.id,
                     plan_id=plan.id,
                     quotation_id=quotation.id,
+                    lifecycle_status="active",
+                    quantity=quotation.quantity,
+                    amount=quotation.amount,
                     status="active",
                     start_date=date.today() - timedelta(days=10),
                     next_billing_date=date.today() + timedelta(days=20),
@@ -493,10 +646,32 @@ def create_app(test_config=None):
                 filters.append(Customer.id == int(search))
             query = query.filter(or_(*filters))
 
-        valid_customer_statuses = {"active", "trialing", "past_due", "canceled", "expired", "none"}
-        status_expression = _customer_status_expression()
-        if status in valid_customer_statuses:
-            query = query.filter(status_expression == status)
+        database_statuses = {
+            value
+            for value, in db.session.query(Subscription.lifecycle_status).distinct().all()
+            if value
+        }
+        status_order = ("active", "confirmed", "quotation", "draft", "closed")
+        ordered_statuses = [
+            value for value in status_order if value in database_statuses
+        ] + sorted(database_statuses.difference(status_order))
+        customer_status_options = [
+            (
+                value,
+                CUSTOMER_STATUS_LABELS.get(
+                    value, value.replace("_", " ").title()
+                ),
+            )
+            for value in ordered_statuses
+        ]
+        customer_status_options.append(("none", "No subscription"))
+
+        if status == "none":
+            query = query.filter(~Customer.subscriptions.any())
+        elif status in database_statuses:
+            query = query.filter(
+                Customer.subscriptions.any(Subscription.lifecycle_status == status)
+            )
         else:
             status = ""
 
@@ -513,6 +688,7 @@ def create_app(test_config=None):
             "staff/customers.html",
             customers=customers,
             customer_statuses={customer.id: _customer_status(customer) for customer in customers},
+            customer_status_options=customer_status_options,
             search=search,
             status=status,
             page=page,
@@ -747,6 +923,9 @@ def create_app(test_config=None):
             quotation=quotation,
             status=effective_status,
             allowed_transitions=transitions.get(effective_status, ()),
+            converted_subscription=Subscription.query.filter_by(
+                quotation_id=quotation.id
+            ).first(),
         )
 
     @app.route("/staff/quotations/<int:quotation_id>/status", methods=["POST"])
@@ -767,15 +946,388 @@ def create_app(test_config=None):
             flash(f"Quotation marked {new_status}.", "success")
         return redirect(url_for("staff_quotation_detail", quotation_id=quotation.id))
 
+    @app.route("/staff/quotations/<int:quotation_id>/convert", methods=["POST"])
+    @role_required("staff")
+    def staff_quotation_convert(quotation_id):
+        quotation = Quotation.query.options(
+            selectinload(Quotation.plan)
+        ).filter_by(id=quotation_id).first_or_404()
+        if quotation.status != "accepted":
+            flash("Only accepted quotations can be converted.", "error")
+            return redirect(url_for("staff_quotation_detail", quotation_id=quotation.id))
+
+        existing_subscription = Subscription.query.filter_by(
+            quotation_id=quotation.id
+        ).first()
+        if existing_subscription:
+            flash("This quotation has already been converted.", "error")
+            return redirect(
+                url_for(
+                    "staff_subscription_detail",
+                    subscription_id=existing_subscription.id,
+                )
+            )
+
+        next_billing_date = _add_billing_cycle(
+            date.today(), quotation.plan.billing_cycle
+        )
+        subscription = Subscription(
+            subscription_code=f"SUB-{date.today():%Y%m%d}-{secrets.token_hex(3).upper()}",
+            customer_id=quotation.customer_id,
+            plan_id=quotation.plan_id,
+            quotation_id=quotation.id,
+            lifecycle_status="quotation",
+            quantity=quotation.quantity,
+            amount=quotation.amount,
+            status="trialing",
+            start_date=date.today(),
+            next_billing_date=next_billing_date,
+        )
+        db.session.add(subscription)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("This quotation was already converted.", "error")
+            existing_subscription = Subscription.query.filter_by(
+                quotation_id=quotation.id
+            ).first()
+            if existing_subscription:
+                return redirect(
+                    url_for(
+                        "staff_subscription_detail",
+                        subscription_id=existing_subscription.id,
+                    )
+                )
+            return redirect(url_for("staff_quotation_detail", quotation_id=quotation.id))
+        flash("Accepted quotation converted to a subscription.", "success")
+        return redirect(
+            url_for("staff_subscription_detail", subscription_id=subscription.id)
+        )
+
     @app.route("/staff/subscriptions")
     @role_required("staff")
     def staff_subscriptions():
-        return render_template("staff/placeholder.html", title="Subscriptions", description="Manage active plans and upcoming renewals here.")
+        search = request.args.get("q", "").strip()
+        status = request.args.get("status", "").strip().lower()
+        billing_cycle = request.args.get("billing_cycle", "").strip().lower()
+        expiring_soon = request.args.get("expiring_soon", "").strip() == "1"
+        page = max(request.args.get("page", 1, type=int), 1)
+        per_page = 10
+        query = Subscription.query.join(Customer).join(Plan).join(Product).options(
+            selectinload(Subscription.customer),
+            selectinload(Subscription.plan).selectinload(Plan.product),
+        )
+        if search:
+            matches = [
+                Subscription.subscription_code.ilike(f"%{search}%"),
+                Customer.name.ilike(f"%{search}%"),
+                Plan.name.ilike(f"%{search}%"),
+                Product.name.ilike(f"%{search}%"),
+            ]
+            if search.isdigit():
+                matches.append(Subscription.id == int(search))
+            query = query.filter(or_(*matches))
+
+        subscription_statuses = ("draft", "quotation", "confirmed", "active", "closed")
+        if status in subscription_statuses:
+            query = query.filter(Subscription.lifecycle_status == status)
+        else:
+            status = ""
+        if billing_cycle in ("monthly", "quarterly", "yearly", "one_time"):
+            query = query.filter(Plan.billing_cycle == billing_cycle)
+        else:
+            billing_cycle = ""
+        if expiring_soon:
+            query = query.filter(
+                Subscription.lifecycle_status != "closed",
+                Subscription.end_date.isnot(None),
+                Subscription.end_date >= date.today(),
+                Subscription.end_date <= _subscription_expiring_cutoff(),
+            )
+
+        total = query.count()
+        pages = max((total + per_page - 1) // per_page, 1)
+        page = min(page, pages)
+        subscriptions = (
+            query.order_by(Subscription.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+        return render_template(
+            "staff/subscriptions.html",
+            subscriptions=subscriptions,
+            search=search,
+            status=status,
+            billing_cycle=billing_cycle,
+            expiring_soon=expiring_soon,
+            statuses=subscription_statuses,
+            billing_cycles=("monthly", "quarterly", "yearly", "one_time"),
+            page=page,
+            pages=pages,
+            total=total,
+        )
+
+    @app.route("/staff/subscriptions/<int:subscription_id>")
+    @role_required("staff")
+    def staff_subscription_detail(subscription_id):
+        subscription = Subscription.query.options(
+            selectinload(Subscription.customer),
+            selectinload(Subscription.plan).selectinload(Plan.product),
+            selectinload(Subscription.invoices),
+        ).filter_by(id=subscription_id).first_or_404()
+        transitions = {
+            "draft": ("quotation",),
+            "quotation": ("confirmed",),
+            "confirmed": ("active",),
+            "active": ("closed",),
+        }
+        return render_template(
+            "staff/subscription_detail.html",
+            subscription=subscription,
+            allowed_transitions=transitions.get(subscription.lifecycle_status, ()),
+            invoice_status_labels={
+                invoice.id: _invoice_status_label(invoice.status)
+                for invoice in subscription.invoices
+            },
+        )
+
+    @app.route(
+        "/staff/subscriptions/<int:subscription_id>/status", methods=["POST"]
+    )
+    @role_required("staff")
+    def staff_subscription_update_status(subscription_id):
+        subscription = Subscription.query.filter_by(id=subscription_id).first_or_404()
+        transitions = {
+            "draft": ("quotation",),
+            "quotation": ("confirmed",),
+            "confirmed": ("active",),
+            "active": ("closed",),
+        }
+        current_status = subscription.lifecycle_status
+        new_status = request.form.get("status", "").strip().lower()
+        if new_status not in transitions.get(current_status, ()):
+            flash("That subscription status transition is not allowed.", "error")
+        else:
+            subscription.lifecycle_status = new_status
+            subscription.status = {
+                "draft": "trialing",
+                "quotation": "trialing",
+                "confirmed": "past_due",
+                "active": "active",
+                "closed": "canceled",
+            }[new_status]
+            if new_status == "active" and subscription.next_billing_date is None:
+                subscription.next_billing_date = _add_billing_cycle(
+                    subscription.start_date, subscription.plan.billing_cycle
+                )
+            if new_status == "closed":
+                subscription.end_date = date.today()
+            db.session.commit()
+            flash(f"Subscription marked {new_status}.", "success")
+        return redirect(
+            url_for("staff_subscription_detail", subscription_id=subscription.id)
+        )
+
+    @app.route(
+        "/staff/subscriptions/<int:subscription_id>/invoices/new",
+        methods=["GET", "POST"],
+    )
+    @role_required("staff")
+    def staff_invoice_create(subscription_id):
+        subscription = Subscription.query.options(
+            selectinload(Subscription.customer),
+            selectinload(Subscription.plan),
+        ).filter_by(id=subscription_id).first_or_404()
+        if subscription.lifecycle_status not in ("confirmed", "active"):
+            abort(400, description="Invoices can only be generated for confirmed or active subscriptions.")
+
+        next_period_start = subscription.next_billing_date or date.today()
+        next_period_end = _add_billing_cycle(
+            next_period_start, subscription.plan.billing_cycle
+        )
+        if next_period_end is None:
+            next_period_end = next_period_start + timedelta(days=1)
+        default_due_date = date.today() + timedelta(days=14)
+        form_data = request.form if request.method == "POST" else {}
+        if request.method == "POST":
+            errors = {}
+            try:
+                period_start = date.fromisoformat(
+                    request.form.get("billing_period_start", "").strip()
+                )
+                period_end = date.fromisoformat(
+                    request.form.get("billing_period_end", "").strip()
+                )
+                due_date = date.fromisoformat(request.form.get("due_date", "").strip())
+                if period_end <= period_start:
+                    errors["billing_period_end"] = "Period end must be after period start."
+                if due_date < date.today():
+                    errors["due_date"] = "Due date must be today or later."
+            except ValueError:
+                errors["dates"] = "Enter valid billing period and due dates."
+            if not errors:
+                duplicate = Invoice.query.filter_by(
+                    subscription_id=subscription.id,
+                    billing_period_start=period_start,
+                    billing_period_end=period_end,
+                ).first()
+                if duplicate:
+                    errors["duplicate"] = "An invoice already exists for this billing period."
+            if not errors:
+                total_amount = Decimal(subscription.amount).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                invoice = Invoice(
+                    invoice_number=f"INV-{date.today():%Y%m%d}-{secrets.token_hex(3).upper()}",
+                    customer_id=subscription.customer_id,
+                    subscription_id=subscription.id,
+                    billing_period_start=period_start,
+                    billing_period_end=period_end,
+                    issue_date=date.today(),
+                    due_date=due_date,
+                    subtotal=total_amount,
+                    tax=Decimal("0.00"),
+                    total=total_amount,
+                    status="draft",
+                )
+                db.session.add(invoice)
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+                    flash("An invoice already exists for this billing period.", "error")
+                else:
+                    flash("Invoice generated successfully.", "success")
+                    return redirect(
+                        url_for("staff_invoice_detail", invoice_id=invoice.id)
+                    )
+            for message in errors.values():
+                flash(message, "error")
+        return render_template(
+            "staff/invoice_form.html",
+            subscription=subscription,
+            form_data=form_data,
+            default_period_start=next_period_start.isoformat(),
+            default_period_end=(next_period_end - timedelta(days=1)).isoformat(),
+            default_due_date=default_due_date.isoformat(),
+            today_iso=date.today().isoformat(),
+        )
 
     @app.route("/staff/invoices")
     @role_required("staff")
     def staff_invoices():
-        return render_template("staff/placeholder.html", title="Invoices", description="Review invoice status, due dates, and billing history here.")
+        search = request.args.get("q", "").strip()
+        status = request.args.get("status", "").strip().lower()
+        page = max(request.args.get("page", 1, type=int), 1)
+        per_page = 10
+        query = Invoice.query.join(Customer).options(
+            selectinload(Invoice.customer),
+            selectinload(Invoice.subscription),
+        )
+        if search:
+            matches = [
+                Invoice.invoice_number.ilike(f"%{search}%"),
+                Customer.name.ilike(f"%{search}%"),
+            ]
+            if search.isdigit():
+                matches.append(Invoice.id == int(search))
+            query = query.filter(or_(*matches))
+        invoice_statuses = ("draft", "confirmed", "paid")
+        if status in invoice_statuses:
+            if status == "confirmed":
+                query = query.filter(Invoice.status.in_(("open", "overdue")))
+            else:
+                query = query.filter(Invoice.status == status)
+        else:
+            status = ""
+        total = query.count()
+        pages = max((total + per_page - 1) // per_page, 1)
+        page = min(page, pages)
+        invoices = (
+            query.order_by(Invoice.issue_date.desc(), Invoice.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+        return render_template(
+            "staff/invoices.html",
+            invoices=invoices,
+            invoice_statuses={invoice.id: _invoice_status_label(invoice.status) for invoice in invoices},
+            search=search,
+            status=status,
+            page=page,
+            pages=pages,
+            total=total,
+            statuses=invoice_statuses,
+        )
+
+    @app.route("/staff/invoices/<int:invoice_id>")
+    @role_required("staff")
+    def staff_invoice_detail(invoice_id):
+        invoice = Invoice.query.options(
+            selectinload(Invoice.customer),
+            selectinload(Invoice.subscription).selectinload(Subscription.plan),
+            selectinload(Invoice.payments),
+        ).filter_by(id=invoice_id).first_or_404()
+        transitions = {
+            "draft": ("confirmed",),
+            "open": ("paid",),
+            "overdue": ("paid",),
+        }
+        return render_template(
+            "staff/invoice_detail.html",
+            invoice=invoice,
+            payment_status=_invoice_status_label(invoice.status),
+            allowed_transitions=transitions.get(invoice.status, ()),
+        )
+
+    @app.route("/staff/invoices/<int:invoice_id>/status", methods=["POST"])
+    @role_required("staff")
+    def staff_invoice_update_status(invoice_id):
+        invoice = Invoice.query.filter_by(id=invoice_id).first_or_404()
+        transitions = {
+            "draft": ("confirmed",),
+            "open": ("paid",),
+            "overdue": ("paid",),
+        }
+        requested_status = request.form.get("status", "").strip().lower()
+        allowed = transitions.get(invoice.status, ())
+        if requested_status not in allowed:
+            flash("That invoice status transition is not allowed.", "error")
+        else:
+            invoice.status = "open" if requested_status == "confirmed" else requested_status
+            if requested_status == "paid":
+                invoice.paid_at = datetime.now().astimezone()
+            db.session.commit()
+            flash(f"Invoice marked {requested_status}.", "success")
+        return redirect(url_for("staff_invoice_detail", invoice_id=invoice.id))
+
+    @app.route("/staff/invoices/<int:invoice_id>/send", methods=["POST"])
+    @role_required("staff")
+    def staff_invoice_send(invoice_id):
+        invoice = Invoice.query.filter_by(id=invoice_id).first_or_404()
+        if invoice.status == "paid":
+            flash("Paid invoices cannot be sent again.", "error")
+        else:
+            invoice.sent_at = datetime.now().astimezone()
+            db.session.commit()
+            flash("Invoice marked as sent. No email was sent.", "success")
+        return redirect(url_for("staff_invoice_detail", invoice_id=invoice.id))
+
+    @app.route("/staff/invoices/<int:invoice_id>/pdf")
+    @role_required("staff")
+    def staff_invoice_pdf(invoice_id):
+        invoice = Invoice.query.options(
+            selectinload(Invoice.customer)
+        ).filter_by(id=invoice_id).first_or_404()
+        response = make_response(_invoice_pdf(invoice))
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = (
+            f'attachment; filename="{invoice.invoice_number}.pdf"'
+        )
+        return response
 
     @app.route("/staff/payments")
     @role_required("staff")

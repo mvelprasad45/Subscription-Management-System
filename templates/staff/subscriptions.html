@@ -1,0 +1,59 @@
+{% extends "staff/base.html" %}
+
+{% block title %}Subscriptions{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">BILLING MANAGEMENT</p>
+    <h1>Subscriptions</h1>
+    <p class="page-subtitle">Track subscription lifecycle, renewal dates, and billing.</p>
+  </div>
+</section>
+<section class="panel records-panel">
+  <form class="records-toolbar" method="get" action="{{ url_for('staff_subscriptions') }}">
+    <label class="filter-search">
+      <span class="sr-only">Search subscriptions</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.2 4.2"/></svg>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search ID, customer, product or plan">
+    </label>
+    <label class="filter-select"><span class="sr-only">Filter by status</span><select name="status">
+      <option value="">All statuses</option>
+      {% for value in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ value|title }}</option>{% endfor %}
+    </select></label>
+    <label class="filter-select"><span class="sr-only">Filter by billing cycle</span><select name="billing_cycle">
+      <option value="">All billing cycles</option>
+      {% for value in billing_cycles %}<option value="{{ value }}"{% if billing_cycle == value %} selected{% endif %}>{{ value|replace("_", " ")|title }}</option>{% endfor %}
+    </select></label>
+    <label class="checkbox-filter"><input type="checkbox" name="expiring_soon" value="1"{% if expiring_soon %} checked{% endif %}> Expiring in 30 days</label>
+    <button class="button button-secondary" type="submit">Apply filters</button>
+    {% if search or status or billing_cycle or expiring_soon %}<a class="clear-filters" href="{{ url_for('staff_subscriptions') }}">Clear</a>{% endif %}
+  </form>
+  <div class="table-scroll">
+    <table class="records-table wide-table">
+      <thead><tr><th>Subscription ID</th><th>Customer</th><th>Product</th><th>Plan</th><th>Start date</th><th>Expiry date</th><th>Billing cycle</th><th>Amount</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for subscription in subscriptions %}
+        <tr>
+          <td><a class="record-name" href="{{ url_for('staff_subscription_detail', subscription_id=subscription.id) }}">{{ subscription.subscription_code }}</a></td>
+          <td>{{ subscription.customer.name }}</td><td>{{ subscription.plan.product.name }}</td><td>{{ subscription.plan.name }}</td>
+          <td>{{ subscription.start_date.strftime("%b %d, %Y") }}</td>
+          <td>{{ subscription.end_date.strftime("%b %d, %Y") if subscription.end_date else "—" }}</td>
+          <td>{{ subscription.plan.billing_cycle|replace("_", " ")|title }}</td>
+          <td>{{ subscription.amount|currency }}</td>
+          <td><span class="status-badge status-{{ subscription.lifecycle_status }}">{{ subscription.lifecycle_status|title }}</span></td>
+        </tr>
+      {% else %}<tr><td class="table-empty" colspan="9">No subscriptions match these filters.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="records-footer">
+    <span>Showing {{ subscriptions|length }} of {{ total }} subscriptions</span>
+    <nav class="pagination" aria-label="Subscription pages">
+      {% if page > 1 %}<a href="{{ url_for('staff_subscriptions', q=search, status=status, billing_cycle=billing_cycle, expiring_soon='1' if expiring_soon else '', page=page-1) }}" aria-label="Previous page">‹</a>{% else %}<span class="disabled">‹</span>{% endif %}
+      <span class="page-indicator">Page {{ page }} of {{ pages }}</span>
+      {% if page < pages %}<a href="{{ url_for('staff_subscriptions', q=search, status=status, billing_cycle=billing_cycle, expiring_soon='1' if expiring_soon else '', page=page+1) }}" aria-label="Next page">›</a>{% else %}<span class="disabled">›</span>{% endif %}
+    </nav>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "staff/base.html" %}
+
+{% block title %}Invoices{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">BILLING MANAGEMENT</p>
+    <h1>Invoices</h1>
+    <p class="page-subtitle">Review invoice status, billing periods, and due dates.</p>
+  </div>
+</section>
+<section class="panel records-panel">
+  <form class="records-toolbar" method="get" action="{{ url_for('staff_invoices') }}">
+    <label class="filter-search">
+      <span class="sr-only">Search invoices</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.2 4.2"/></svg>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search invoice number, customer or ID">
+    </label>
+    <label class="filter-select"><span class="sr-only">Filter by payment status</span><select name="status">
+      <option value="">All statuses</option>
+      {% for value in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ value|title }}</option>{% endfor %}
+    </select></label>
+    <button class="button button-secondary" type="submit">Apply filters</button>
+    {% if search or status %}<a class="clear-filters" href="{{ url_for('staff_invoices') }}">Clear</a>{% endif %}
+  </form>
+  <div class="table-scroll"><table class="records-table">
+    <thead><tr><th>Invoice number</th><th>Customer</th><th>Invoice date</th><th>Due date</th><th>Total amount</th><th>Payment status</th></tr></thead>
+    <tbody>
+    {% for invoice in invoices %}
+      <tr>
+        <td><a class="record-name" href="{{ url_for('staff_invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a></td>
+        <td>{{ invoice.customer.name }}</td><td>{{ invoice.issue_date.strftime("%b %d, %Y") }}</td><td>{{ invoice.due_date.strftime("%b %d, %Y") }}</td>
+        <td>{{ invoice.total|currency }}</td><td><span class="status-badge status-{{ invoice.status }}">{{ invoice_statuses[invoice.id] }}</span></td>
+      </tr>
+    {% else %}<tr><td class="table-empty" colspan="6">No invoices match these filters.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <div class="records-footer">
+    <span>Showing {{ invoices|length }} of {{ total }} invoices</span>
+    <nav class="pagination" aria-label="Invoice pages">
+      {% if page > 1 %}<a href="{{ url_for('staff_invoices', q=search, status=status, page=page-1) }}" aria-label="Previous page">‹</a>{% else %}<span class="disabled">‹</span>{% endif %}
+      <span class="page-indicator">Page {{ page }} of {{ pages }}</span>
+      {% if page < pages %}<a href="{{ url_for('staff_invoices', q=search, status=status, page=page+1) }}" aria-label="Next page">›</a>{% else %}<span class="disabled">›</span>{% endif %}
+    </nav>
+  </div>
+</section>
+{% endblock %}

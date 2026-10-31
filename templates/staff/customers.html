@@ -25,7 +25,7 @@
       <span class="sr-only">Filter by subscription status</span>
       <select name="status">
         <option value="">All statuses</option>
-        {% for value, label in [("active", "Active"), ("trialing", "Trialing"), ("past_due", "Past due"), ("canceled", "Canceled"), ("expired", "Expired"), ("none", "No subscription")] %}
+        {% for value, label in customer_status_options %}
         <option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
